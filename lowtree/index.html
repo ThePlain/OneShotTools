@@ -1,0 +1,2440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lowtree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Instrument panel in moss-ink with a resin-amber accent; the viewport is a pale meadow sky.
+     Layout: full-bleed 3D viewport left, 344px control column right, herbarium label pinned in the viewport. */
+  --panel:#151a16;
+  --panel-2:#1c231e;
+  --line:#2b352e;
+  --text:#e5e8dc;
+  --muted:#939d90;
+  --accent:#e2a23a;
+  --paper:#f2f0e6;
+  --ink:#1b1d18;
+  --stamp:#a5402a;
+  --f-display:"Newsreader","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --f-ui:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--panel);color:var(--text);font-family:var(--f-ui);font-size:13px;line-height:1.35;overflow:hidden}
+#app{display:grid;grid-template-columns:minmax(0,1fr) 344px;height:100%}
+#stage{position:relative;overflow:hidden;background:#dfe1d6;min-height:0}
+#gl{display:block;width:100%;height:100%;touch-action:none;cursor:grab;outline:none}
+#gl.drag{cursor:grabbing}
+.brand{position:absolute;left:20px;top:14px;pointer-events:none;color:var(--ink)}
+.brand h1{margin:0;font-family:var(--f-display);font-style:italic;font-weight:500;font-size:34px;letter-spacing:-0.01em;line-height:1}
+.brand p{margin:4px 0 0;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.62}
+.toolbar{position:absolute;right:14px;top:14px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 220px)}
+.tb{font:500 12px/1 var(--f-ui);letter-spacing:.02em;color:var(--ink);background:rgba(242,240,230,.82);border:1px solid rgba(27,29,24,.28);border-radius:3px;padding:7px 10px;cursor:pointer;backdrop-filter:blur(6px)}
+.tb:hover{background:var(--paper);border-color:rgba(27,29,24,.6)}
+.tb[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tb:focus-visible,.btn:focus-visible,.sp:focus-visible,.sw:focus-visible,.seg button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* herbarium label */
+.tag{position:absolute;left:18px;bottom:18px;width:318px;background:var(--paper);color:var(--ink);border:1px solid var(--ink);padding:3px;pointer-events:none;box-shadow:0 6px 20px rgba(20,24,18,.18)}
+.tag-in{border:1px solid rgba(27,29,24,.55);padding:10px 12px 10px}
+.tag-top{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase}
+.tag-latin{font-family:var(--f-display);font-style:italic;font-size:24px;line-height:1.05;margin:8px 0 1px;text-wrap:balance}
+.tag-latin small{font-style:normal;font-size:14px;opacity:.75;margin-left:4px}
+.tag-common{font-size:12.5px;opacity:.8}
+.tag-grid{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:2px 10px;margin-top:9px;padding-top:8px;border-top:1px solid rgba(27,29,24,.35);font-family:var(--f-mono);font-size:10.5px;font-variant-numeric:tabular-nums}
+.tag-grid dt{opacity:.6;text-transform:uppercase;letter-spacing:.06em;font-size:9.5px;align-self:center}
+.tag-grid dd{margin:0}
+.tag-foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px;font-family:var(--f-mono);font-size:9.5px;opacity:.85}
+.stamp{color:var(--stamp);border:1.5px solid var(--stamp);padding:2px 6px;transform:rotate(-5deg);letter-spacing:.14em;text-transform:uppercase;font-weight:500;opacity:.9}
+.busy{position:absolute;right:14px;bottom:18px;font-family:var(--f-mono);font-size:11px;color:var(--ink);background:rgba(242,240,230,.86);border:1px solid rgba(27,29,24,.3);padding:6px 9px;border-radius:3px;opacity:0;transition:opacity .15s;pointer-events:none}
+.busy.on{opacity:1}
+.toast{position:absolute;left:50%;top:16px;transform:translateX(-50%);background:var(--ink);color:var(--paper);font-size:12.5px;padding:8px 12px;border-radius:3px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80%}
+.toast.on{opacity:1}
+.nogl{position:absolute;inset:0;display:none;place-items:center;color:var(--ink);font-size:15px;padding:30px;text-align:center}
+
+/* panel */
+#panel{overflow-y:auto;border-left:1px solid var(--line);background:var(--panel);min-height:0;scrollbar-color:var(--line) transparent}
+.phead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+.phead .seg.style{flex-basis:100%}
+.sub{display:grid;gap:3px}
+.sub[hidden]{display:none}
+.atlas{width:100%;aspect-ratio:1;display:block;border:1px solid var(--line);border-radius:3px;background:#0f130f;margin-top:6px}
+.cap{font:400 10.5px var(--f-mono);color:var(--muted);letter-spacing:.04em;margin:2px 0 4px}
+.phead label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.phead input{width:78px}
+.phead .grow{flex:1}
+input[type=number]{font:500 12.5px var(--f-mono);color:var(--text);background:var(--panel-2);border:1px solid var(--line);border-radius:3px;padding:5px 7px}
+input[type=number]:focus{outline:2px solid var(--accent);outline-offset:0}
+.btn{font:500 12px/1 var(--f-ui);color:var(--text);background:var(--panel-2);border:1px solid var(--line);border-radius:3px;padding:7px 10px;cursor:pointer;letter-spacing:.02em}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:#1d1609;border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+details.sec{border-bottom:1px solid var(--line)}
+details.sec>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:8px;padding:12px 16px 10px;user-select:none}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary h2{margin:0;font:500 17px/1.1 var(--f-display);letter-spacing:.005em}
+details.sec>summary .hint{color:var(--muted);font-size:11.5px;flex:1}
+details.sec>summary::after{content:"";width:7px;height:7px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(45deg) translate(-2px,-2px);transition:transform .15s}
+details.sec[open]>summary::after{transform:rotate(-135deg) translate(-1px,-1px)}
+.body{padding:2px 16px 14px;display:grid;gap:3px}
+.row{display:grid;grid-template-columns:96px minmax(0,1fr) 54px;align-items:center;gap:8px;min-height:24px}
+.row label{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row output{font:400 11.5px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+.row select{grid-column:2 / 4}
+select{font:500 12.5px var(--f-ui);color:var(--text);background:var(--panel-2);border:1px solid var(--line);border-radius:3px;padding:5px 6px}
+select:focus{outline:2px solid var(--accent);outline-offset:0}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;margin:0;--fill:50%}
+input[type=range]:focus{outline:none}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:linear-gradient(to right,var(--accent) var(--fill),var(--line) var(--fill))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--panel);border:2px solid var(--accent);margin-top:-5px}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(226,162,58,.35)}
+input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:2px;background:var(--accent)}
+input[type=range]::-moz-range-thumb{width:9px;height:9px;border-radius:50%;background:var(--panel);border:2px solid var(--accent)}
+.colors{display:grid;grid-template-columns:96px 1fr 1fr;gap:8px;align-items:center;min-height:28px}
+.colors>span{color:var(--muted);font-size:12.5px}
+.cpick{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
+input[type=color]{-webkit-appearance:none;appearance:none;width:28px;height:22px;border:1px solid var(--line);border-radius:3px;background:none;padding:0;cursor:pointer}
+input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
+input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
+.seg{display:flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.seg button{flex:1;font:500 12px/1 var(--f-ui);color:var(--muted);background:transparent;border:0;border-right:1px solid var(--line);padding:7px 6px;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.seg button.dim{opacity:.5}
+.segrow{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center;min-height:30px}
+.segrow>span{color:var(--muted);font-size:12.5px}
+.species{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding-top:2px}
+.sp{text-align:left;background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:3px;padding:7px 9px 8px;cursor:pointer;color:var(--text)}
+.sp:hover{border-color:var(--muted)}
+.sp[aria-pressed="true"]{border-left-color:var(--accent);background:#222a24}
+.sp i{display:block;font:italic 400 14.5px/1.15 var(--f-display)}
+.sp span{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:2px 0 6px}
+.sw{display:grid;gap:4px;justify-items:stretch;background:var(--panel-2);border:1px solid var(--line);border-radius:3px;padding:4px;cursor:pointer;color:var(--muted);font:500 11px var(--f-ui)}
+.sw canvas{width:100%;aspect-ratio:1.4;display:block;border-radius:2px;background:#111511}
+.sw[aria-pressed="true"]{border-color:var(--accent);color:var(--text)}
+.sw:hover{border-color:var(--muted)}
+.ticks{display:grid;grid-template-columns:96px 1fr 54px;gap:8px;margin-top:-6px}
+.ticks div{display:flex;justify-content:space-between;font:400 9.5px var(--f-mono);color:var(--muted);letter-spacing:.04em;text-transform:uppercase;padding:0 1px}
+.note{color:var(--muted);font-size:11.5px;margin:4px 0 2px;max-width:60ch}
+.note.warn{color:#e8b866}
+.lvtabs{margin:2px 0 6px}
+.xgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.xgrid .wide{grid-column:1 / 3}
+.fileinp{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+@media (max-width:760px){
+  #app{grid-template-columns:1fr;grid-template-rows:56% 44%}
+  #panel{border-left:0;border-top:1px solid var(--line)}
+  .brand h1{font-size:26px}
+  .brand p{display:none}
+  .toolbar{max-width:calc(100% - 140px)}
+  .tb{padding:6px 8px;font-size:11.5px}
+  .tag{width:auto;right:auto;max-width:calc(100% - 24px);left:12px;bottom:12px}
+  .tag-latin{font-size:19px}
+  .tag-grid{grid-template-columns:auto 1fr auto 1fr}
+  .tag-foot{display:none}
+}
+@media (max-width:420px){
+  .tag-grid,.tag-common{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="stage">
+    <canvas id="gl" tabindex="0" aria-label="3D tree viewport. Drag to orbit, right-drag or shift-drag to pan, scroll or pinch to zoom."></canvas>
+    <div class="nogl" id="nogl">This viewer needs WebGL 2. Try a recent Chrome, Edge, Firefox or Safari.</div>
+    <header class="brand">
+      <h1>Lowtree</h1>
+      <p>Procedural tree generator · drag to orbit · scroll to zoom</p>
+    </header>
+    <div class="toolbar" role="toolbar" aria-label="Viewport">
+      <button class="tb" id="tb-frame" title="Frame the tree (F)">Frame</button>
+      <button class="tb" id="tb-spin" aria-pressed="false" title="Turntable">Spin</button>
+      <button class="tb" id="tb-wind" aria-pressed="true" title="Animate wind">Wind</button>
+      <button class="tb" id="tb-leaves" aria-pressed="true" title="Show leaves">Leaves</button>
+      <button class="tb" id="tb-wire" aria-pressed="false" title="Wireframe overlay">Wire</button>
+    </div>
+    <aside class="tag" aria-live="polite">
+      <div class="tag-in">
+        <div class="tag-top"><span>Lowtree herbarium</span><span id="t-no">No. 0423</span></div>
+        <div class="tag-latin" id="t-latin">Quercus robur <small>L.</small></div>
+        <div class="tag-common" id="t-common">English oak</div>
+        <dl class="tag-grid">
+          <dt>Height</dt><dd id="t-h">–</dd>
+          <dt>DBH</dt><dd id="t-dbh">–</dd>
+          <dt>Crown</dt><dd id="t-crown">–</dd>
+          <dt id="t-leaves-l">Leaves</dt><dd id="t-leaves">–</dd>
+          <dt>Branches</dt><dd id="t-br">–</dd>
+          <dt>Tris</dt><dd id="t-tris">–</dd>
+        </dl>
+        <div class="tag-foot"><span id="t-date">Grown –</span><span class="stamp" id="t-stamp">Summer</span></div>
+      </div>
+    </aside>
+    <div class="busy" id="busy">Growing…</div>
+    <div class="toast" id="toast" role="status"></div>
+  </main>
+  <section id="panel" aria-label="Tree settings">
+    <div class="phead">
+      <label for="seed">Seed</label>
+      <input id="seed" type="number" min="0" max="99999" step="1" value="423">
+      <button class="btn" id="reroll" title="New random seed (R)">Reroll</button>
+      <span class="grow"></span>
+      <button class="btn" id="reset" title="Reset to the selected species">Reset</button>
+    </div>
+    <div id="sections"></div>
+  </section>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Lowtree — procedural tree generator (WebGL2, no dependencies)
+   ===================================================================== */
+
+// ---------- math ----------
+const PI = Math.PI, TAU = PI * 2;
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const vlen = a => Math.hypot(a[0], a[1], a[2]);
+const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const UP = [0, 1, 0];
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash(a, b) {
+  let h = Math.imul(a | 0, 0x9E3779B1) ^ Math.imul((b | 0) + 0x7F4A7C15, 0x85EBCA77);
+  h ^= h >>> 15; h = Math.imul(h, 0xC2B2AE3D); h ^= h >>> 13;
+  return h >>> 0;
+}
+function h2(x, y, s) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 982451653)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function randUnit(r) {
+  const z = r() * 2 - 1, t = r() * TAU, s = Math.sqrt(1 - z * z);
+  return [s * Math.cos(t), z, s * Math.sin(t)];
+}
+function perp(v) {
+  const a = Math.abs(v[1]) < 0.9 ? UP : [1, 0, 0];
+  return norm(cross(v, a));
+}
+
+// periodic value noise (for tileable textures)
+function pnoise(x, y, px, py, s) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  let fx = x - ix, fy = y - iy;
+  const x0 = ((ix % px) + px) % px, y0 = ((iy % py) + py) % py, x1 = (x0 + 1) % px, y1 = (y0 + 1) % py;
+  const a = h2(x0, y0, s), b = h2(x1, y0, s), c = h2(x0, y1, s), d = h2(x1, y1, s);
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+}
+function pfbm(u, v, fx, fy, oct, s) {
+  let sum = 0, amp = 0.5, nrm = 0;
+  for (let o = 0; o < oct; o++) {
+    sum += amp * pnoise(u * fx, v * fy, fx, fy, s + o * 101);
+    nrm += amp; amp *= 0.5; fx *= 2; fy *= 2;
+  }
+  return sum / nrm;
+}
+// periodic worley: out = [F1, F2, cellId]
+function worley(u, v, cx, cy, seed, out) {
+  const X = u * cx, Y = v * cy, ix = Math.floor(X), iy = Math.floor(Y);
+  let f1 = 9, f2 = 9, id = 0;
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const gx = ix + i, gy = iy + j;
+    const wx = ((gx % cx) + cx) % cx, wy = ((gy % cy) + cy) % cy;
+    const dx = gx + h2(wx, wy, seed) - X, dy = gy + h2(wx, wy, seed + 17) - Y;
+    const d = dx * dx + dy * dy;
+    if (d < f1) { f2 = f1; f1 = d; id = h2(wx, wy, seed + 33); } else if (d < f2) f2 = d;
+  }
+  out[0] = Math.sqrt(f1); out[1] = Math.sqrt(f2); out[2] = id;
+}
+function vnoise3(x, y, z) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  let fx = x - ix, fy = y - iy, fz = z - iz;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy); fz = fz * fz * (3 - 2 * fz);
+  const c = (a, b, d) => h2(a, b + Math.imul(d, 1619), 7);
+  const x00 = lerp(c(ix, iy, iz), c(ix + 1, iy, iz), fx), x10 = lerp(c(ix, iy + 1, iz), c(ix + 1, iy + 1, iz), fx);
+  const x01 = lerp(c(ix, iy, iz + 1), c(ix + 1, iy, iz + 1), fx), x11 = lerp(c(ix, iy + 1, iz + 1), c(ix + 1, iy + 1, iz + 1), fx);
+  return lerp(lerp(x00, x10, fy), lerp(x01, x11, fy), fz);
+}
+
+// colour
+const hexToRgb = h => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+const s2l = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+const l2s = c => c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+const lin = h => hexToRgb(h).map(s2l);
+const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+
+// ---------- species, leaf and bark catalogues ----------
+const LEAF_TYPES = {
+  oak:     { label: 'Oak',     aspect: 0.62, color: '#456b2c', autumn: '#a8571c' },
+  maple:   { label: 'Maple',   aspect: 1.0,  color: '#4f7a2a', autumn: '#c8401a' },
+  birch:   { label: 'Birch',   aspect: 0.72, color: '#5b8a30', autumn: '#d7a51c' },
+  willow:  { label: 'Willow',  aspect: 0.24, color: '#6c9636', autumn: '#c6b23c' },
+  blossom: { label: 'Blossom', aspect: 1.0,  color: '#ffffff', autumn: '#ffffff', colored: true, evergreen: true },
+  needle:  { label: 'Needles', aspect: 0.7,  color: '#2f4b28', autumn: '#2f4b28', evergreen: true },
+};
+const BARK_TYPES = {
+  oak:       { label: 'Furrowed',  gloss: 0.12 },
+  pine:      { label: 'Plated',    gloss: 0.10 },
+  birch:     { label: 'Birch',     gloss: 0.22 },
+  cherry:    { label: 'Cherry',    gloss: 0.55 },
+  beech:     { label: 'Smooth',    gloss: 0.30 },
+  weathered: { label: 'Weathered', gloss: 0.18 },
+};
+const SHAPES = [
+  ['conical', 'Conical'], ['spherical', 'Spherical'], ['hemispherical', 'Hemispherical'], ['cylindrical', 'Cylindrical'],
+  ['tapered', 'Tapered cylinder'], ['flame', 'Flame'], ['inverse', 'Inverse cone'], ['tendflame', 'Tend flame'],
+];
+function shapeRatio(shape, ratio) { // ratio: 1 at crown base, 0 at crown top
+  switch (shape) {
+    case 'conical': return 0.2 + 0.8 * ratio;
+    case 'spherical': return 0.2 + 0.8 * Math.sin(PI * ratio);
+    case 'hemispherical': return 0.2 + 0.8 * Math.sin(0.5 * PI * ratio);
+    case 'cylindrical': return 1;
+    case 'tapered': return 0.5 + 0.5 * ratio;
+    case 'flame': return ratio <= 0.7 ? ratio / 0.7 : (1 - ratio) / 0.3;
+    case 'inverse': return 1 - 0.8 * ratio;
+    case 'tendflame': return ratio <= 0.7 ? 0.5 + 0.5 * ratio / 0.7 : 0.5 + 0.5 * (1 - ratio) / 0.3;
+  }
+  return 1;
+}
+
+const LV = (count, start, angle, length, radius, gravity, gnarl, whorl = 1, flatten = 0) => ({ count, start, angle, length, radius, gravity, gnarl, whorl, flatten });
+const BASE = {
+  seed: 423, height: 12, radius: 0.35, taper: 0.12, flare: 0.4, trunkGnarl: 0.3, lean: 3, shape: 'spherical',
+  forkAt: 0, forks: 3, forkAngle: 30, levelCount: 3,
+  levels: [LV(20, 0.3, 55, 0.5, 0.55, 0.1, 0.5), LV(8, 0.15, 45, 0.5, 0.55, 0.1, 0.5), LV(6, 0.1, 40, 0.4, 0.6, 0.05, 0.4)],
+  leafType: 'oak', leafDensity: 18, leafSize: 0.2, leafSizeVar: 0.25, leafAngle: 55, leafDroop: 0.3,
+  leafRandom: 0.45, leafStart: 0.15, season: 0.38, leafColor: '#456b2c', autumnColor: '#a8571c', colorVar: 0.5,
+  barkType: 'oak', barkTint: '#ffffff', barkScale: 0.55, barkRelief: 1.1, moss: 0.2,
+  wind: 0.35, windFreq: 1, windDir: 40, detail: 1,
+  style: 'full', cardLevel: 3, cardPlanes: 2, cardScale: 1.1, cardVariants: 9,
+};
+const PRESETS = {
+  oak: { name: 'English oak', latin: 'Quercus robur', auth: 'L.', p: {
+    seed: 423, height: 13, radius: 0.42, taper: 0.14, flare: 0.55, trunkGnarl: 0.35, lean: 3, shape: 'hemispherical',
+    forkAt: 0.4, forks: 3, forkAngle: 30, levelCount: 3,
+    levels: [LV(20, 0.3, 60, 0.5, 0.6, 0.15, 0.55), LV(9, 0.12, 48, 0.52, 0.6, 0.1, 0.5), LV(8, 0.08, 42, 0.45, 0.6, 0.05, 0.45)],
+    leafType: 'oak', leafDensity: 26, leafSize: 0.26, leafAngle: 55, leafDroop: 0.3, leafRandom: 0.45, leafStart: 0.1,
+    leafColor: '#456b2c', autumnColor: '#a8571c', barkType: 'oak', barkScale: 0.55, barkRelief: 1.2, moss: 0.25 } },
+  birch: { name: 'Silver birch', latin: 'Betula pendula', auth: 'Roth', p: {
+    seed: 1187, height: 15, radius: 0.22, taper: 0.05, flare: 0.25, trunkGnarl: 0.18, lean: 4, shape: 'tendflame',
+    forkAt: 0, levelCount: 3,
+    levels: [LV(40, 0.28, 48, 0.3, 0.42, 0.25, 0.35), LV(10, 0.08, 42, 0.58, 0.5, 0.7, 0.4), LV(7, 0.08, 35, 0.55, 0.55, 1.0, 0.3)],
+    leafType: 'birch', leafDensity: 20, leafSize: 0.14, leafAngle: 50, leafDroop: 0.35, leafRandom: 0.5, leafStart: 0.05,
+    leafColor: '#5b8a30', autumnColor: '#d7a51c', barkType: 'birch', barkScale: 0.45, barkRelief: 0.8, moss: 0.05 } },
+  spruce: { name: 'Norway spruce', latin: 'Picea abies', auth: '(L.) H.Karst.', p: {
+    seed: 77, height: 18, radius: 0.32, taper: 0.03, flare: 0.4, trunkGnarl: 0.06, lean: 1, shape: 'conical',
+    forkAt: 0, levelCount: 2,
+    levels: [LV(75, 0.07, 82, 0.3, 0.32, 0.3, 0.15, 5, 0), LV(16, 0.04, 58, 0.38, 0.5, 0.2, 0.2, 1, 0.75), LV(4, 0.1, 40, 0.4, 0.6, 0.05, 0.3)],
+    leafType: 'needle', leafDensity: 18, leafSize: 0.42, leafSizeVar: 0.2, leafAngle: 30, leafDroop: 0.1, leafRandom: 0.3, leafStart: 0,
+    leafColor: '#2f4b28', autumnColor: '#2f4b28', colorVar: 0.35, barkType: 'pine', barkTint: '#a59d95', barkScale: 0.5, barkRelief: 1.0, moss: 0.2 } },
+  willow: { name: 'Weeping willow', latin: 'Salix babylonica', auth: 'L.', p: {
+    seed: 905, height: 11, radius: 0.42, taper: 0.12, flare: 0.45, trunkGnarl: 0.45, lean: 6, shape: 'spherical',
+    forkAt: 0.3, forks: 3, forkAngle: 34, levelCount: 2,
+    levels: [LV(20, 0.3, 52, 0.42, 0.55, -0.15, 0.45), LV(15, 0.06, 30, 0.85, 0.35, 1.6, 0.15), LV(4, 0.1, 40, 0.4, 0.6, 0.05, 0.3)],
+    leafType: 'willow', leafDensity: 24, leafSize: 0.17, leafAngle: 28, leafDroop: 0.6, leafRandom: 0.35, leafStart: 0.04,
+    leafColor: '#6c9636', autumnColor: '#c6b23c', barkType: 'oak', barkTint: '#d9d3c9', barkScale: 0.5, barkRelief: 1.1, moss: 0.2 } },
+  maple: { name: 'Japanese maple', latin: 'Acer palmatum', auth: 'Thunb.', p: {
+    seed: 31, height: 6, radius: 0.16, taper: 0.16, flare: 0.35, trunkGnarl: 0.5, lean: 8, shape: 'hemispherical',
+    forkAt: 0.22, forks: 3, forkAngle: 38, levelCount: 3,
+    levels: [LV(16, 0.2, 62, 0.55, 0.6, 0.0, 0.55, 1, 0.3), LV(9, 0.1, 50, 0.5, 0.6, 0.12, 0.5, 1, 0.4), LV(7, 0.08, 45, 0.45, 0.6, 0.15, 0.4, 1, 0.4)],
+    leafType: 'maple', leafDensity: 34, leafSize: 0.18, leafAngle: 60, leafDroop: 0.2, leafRandom: 0.4, leafStart: 0.08,
+    leafColor: '#8e2219', autumnColor: '#d0451b', colorVar: 0.45, barkType: 'beech', barkTint: '#b9b4a8', barkScale: 0.35, barkRelief: 0.6, moss: 0.1 } },
+  cherry: { name: 'Japanese cherry', latin: 'Prunus serrulata', auth: 'Lindl.', p: {
+    seed: 2604, height: 7, radius: 0.24, taper: 0.15, flare: 0.35, trunkGnarl: 0.4, lean: 4, shape: 'spherical',
+    forkAt: 0.3, forks: 3, forkAngle: 42, levelCount: 3,
+    levels: [LV(16, 0.25, 55, 0.5, 0.55, 0.05, 0.45), LV(8, 0.12, 45, 0.48, 0.55, 0.15, 0.45), LV(7, 0.08, 40, 0.42, 0.6, 0.2, 0.35)],
+    leafType: 'blossom', leafDensity: 28, leafSize: 0.22, leafAngle: 55, leafDroop: 0.1, leafRandom: 0.6, leafStart: 0.08,
+    leafColor: '#ffffff', autumnColor: '#ffffff', colorVar: 0.3, barkType: 'cherry', barkScale: 0.4, barkRelief: 0.7, moss: 0.05 } },
+  snag: { name: 'Dead snag', latin: 'Quercus', auth: 'sp. (dead)', p: {
+    seed: 66, height: 9, radius: 0.38, taper: 0.14, flare: 0.6, trunkGnarl: 0.75, lean: 7, shape: 'spherical',
+    forkAt: 0.5, forks: 2, forkAngle: 28, levelCount: 2,
+    levels: [LV(10, 0.35, 58, 0.45, 0.55, -0.15, 0.9), LV(6, 0.15, 50, 0.42, 0.55, 0.0, 0.9), LV(4, 0.1, 40, 0.4, 0.6, 0.05, 0.4)],
+    leafDensity: 0, barkType: 'weathered', barkScale: 0.5, barkRelief: 1.3, moss: 0.35, wind: 0.2 } },
+  lowpoly: { name: 'Game-ready broadleaf', latin: 'Branch-card LOD', auth: '', p: {
+    seed: 512, height: 9, radius: 0.3, taper: 0.15, flare: 0.4, trunkGnarl: 0.3, lean: 2, shape: 'spherical',
+    forkAt: 0.38, forks: 3, forkAngle: 32, levelCount: 3,
+    levels: [LV(14, 0.35, 55, 0.5, 0.55, 0.1, 0.4), LV(8, 0.15, 45, 0.5, 0.55, 0.1, 0.45), LV(7, 0.08, 40, 0.45, 0.6, 0.05, 0.4)],
+    leafType: 'oak', leafDensity: 26, leafSize: 0.24, leafAngle: 50, leafRandom: 0.5, leafStart: 0.1,
+    barkType: 'oak', barkScale: 0.6, detail: 0.4, style: 'cards', cardLevel: 2, cardPlanes: 2, cardScale: 1.1 } },
+};
+const PRESET_ORDER = ['oak', 'birch', 'spruce', 'willow', 'maple', 'cherry', 'snag', 'lowpoly'];
+const clone = o => JSON.parse(JSON.stringify(o));
+function presetParams(key) {
+  const p = Object.assign(clone(BASE), clone(PRESETS[key].p));
+  p.levels = (PRESETS[key].p.levels || BASE.levels).map(l => Object.assign(LV(6, 0.1, 40, 0.4, 0.6, 0, 0.4), clone(l)));
+  p.preset = key;
+  return p;
+}
+
+// =====================================================================
+//  Tree generation
+// =====================================================================
+function sampleBranch(b, t) {
+  const s = clamp(t, 0, 1) * b.len, c = b.cum;
+  let lo = 0, hi = c.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (c[m] <= s) lo = m; else hi = m; }
+  const seg = (c[lo + 1] - c[lo]) || 1, f = clamp((s - c[lo]) / seg, 0, 1);
+  const p = lerp3(b.pts[lo], b.pts[lo + 1], f);
+  const T = norm(lerp3(b.T[lo], b.T[lo + 1], f));
+  let N = lerp3(b.N[lo], b.N[lo + 1], f); N = sub(N, scale(T, dot(N, T)));
+  N = vlen(N) < 1e-5 ? perp(T) : norm(N);
+  return { p, T, N, B: cross(T, N), r: lerp(b.rad[lo], b.rad[lo + 1], f), flex: lerp(b.flex[lo], b.flex[lo + 1], f) };
+}
+
+function generateTree(P) {
+  const t0 = performance.now();
+  const H = P.height, R = P.radius, det = P.detail, levels = P.levelCount, TW = !!P._twig;
+  const rng = mulberry32(hash(P.seed, 1));
+  const MAXB = 30000, MAXLEAVES = 160000;
+  const flareH = Math.max(0.5, R * 3.5);
+  const radialFor = (lvl, r) => {
+    let n = Math.round([18, 10, 6, 4][lvl] * det);
+    n = Math.max(n, [5, 4, 3, 3][lvl]);
+    if (r < 0.006) n = 3; else if (r < 0.02) n = Math.min(n, 5);
+    return n;
+  };
+
+  function grow(o) {
+    const r = mulberry32(o.seed);
+    const pts = [o.origin.slice()], cum = [0];
+    let d = norm(o.dir), p = o.origin.slice(), w = [0, 0, 0];
+    const step = o.len / o.segs, k = 1 / o.segs, sk = Math.sqrt(k);
+    for (let i = 1; i <= o.segs; i++) {
+      const t = i / o.segs, ru = randUnit(r);
+      w = [w[0] * 0.5 + ru[0] * 0.5, w[1] * 0.5 + ru[1] * 0.5, w[2] * 0.5 + ru[2] * 0.5];
+      const g = o.gnarl * sk;
+      d = norm([d[0] + w[0] * g, d[1] + w[1] * g - o.gravity * 1.6 * k * (0.35 + t) + o.up * k, d[2] + w[2] * g]);
+      p = [p[0] + d[0] * step, p[1] + d[1] * step, p[2] + d[2] * step];
+      if (!TW && o.level > 0 && p[1] < 0.05) { p[1] = 0.05; if (d[1] < 0) d = norm([d[0], 0, d[2]]); }
+      pts.push(p); cum.push(cum[i - 1] + step);
+    }
+    const n = pts.length, T = [], N = [], B = [], rad = [], flex = [];
+    for (let i = 0; i < n; i++) T.push(norm(sub(pts[Math.min(i + 1, n - 1)], pts[Math.max(i - 1, 0)])));
+    N.push(perp(T[0]));
+    for (let i = 1; i < n; i++) {
+      let v = sub(N[i - 1], scale(T[i], dot(N[i - 1], T[i])));
+      N.push(vlen(v) < 1e-5 ? perp(T[i]) : norm(v));
+    }
+    for (let i = 0; i < n; i++) {
+      B.push(cross(T[i], N[i]));
+      const t = cum[i] / o.len;
+      rad.push(o.radFn(t));
+      flex.push(o.flexBase + o.flexK * o.len * Math.pow(t, 1.5));
+    }
+    return { level: o.level, pts, cum, T, N, B, rad, flex, len: o.len, gT0: o.gT0 ?? 0, gT1: o.gT1 ?? 1,
+      isTrunk: !!o.isTrunk, seed: o.seed, radial: radialFor(o.level, rad[0]), nominal: o.nominal || o.len };
+  }
+
+  // ---- stems: trunk + optional fork leaders ----
+  const leanAz = rng() * TAU, leanA = P.lean * PI / 180;
+  const tdir = [Math.sin(leanA) * Math.cos(leanAz), Math.cos(leanA), Math.sin(leanA) * Math.sin(leanAz)];
+  const trunkSegs = TW ? 10 : 24;
+  const fork = P.forkAt >= 0.05;
+  const rT = g => R * lerp(1, P.taper, clamp(g, 0, 1)) * (1 + P.flare * 1.3 * Math.pow(clamp(1 - g * H / flareH, 0, 1.2), 2));
+  const trunkLen = fork ? H * P.forkAt : H;
+  const sink = TW ? 0 : 0.25;
+  const stems = [];
+  const trunk = grow({ level: 0, origin: [0, -sink, 0], dir: tdir, len: trunkLen + sink, radFn: t => rT((t * (trunkLen + sink) - sink) / H),
+    gnarl: P.trunkGnarl * 0.5, gravity: TW ? (P._twigGrav || 0) : 0, up: TW ? 0 : 0.5, segs: fork ? Math.max(4, Math.round(trunkSegs * P.forkAt) + 2) : trunkSegs,
+    seed: hash(P.seed, 11), flexBase: 0, flexK: 0, gT0: -sink / H, gT1: trunkLen / H, isTrunk: true });
+  stems.push(trunk);
+  if (fork) {
+    const n = trunk.pts.length, end = trunk.pts[n - 1], endT = trunk.T[n - 1], endR = rT(P.forkAt);
+    const k = Math.round(P.forks), share = k === 2 ? 0.78 : k === 3 ? 0.66 : 0.58, az0 = rng() * TAU;
+    for (let i = 0; i < k; i++) {
+      const az = az0 + i * TAU / k + (rng() - 0.5) * 0.6;
+      const ang = P.forkAngle * PI / 180 * (0.8 + 0.4 * rng());
+      const radial = add(scale(trunk.N[n - 1], Math.cos(az)), scale(trunk.B[n - 1], Math.sin(az)));
+      const dir = norm(add(scale(endT, Math.cos(ang)), scale(radial, Math.sin(ang))));
+      const len = H * (1 - P.forkAt) * (0.82 + 0.22 * rng());
+      const r0 = endR * share * (0.9 + 0.2 * rng()), r1 = Math.max(0.004, R * P.taper * 0.6);
+      stems.push(grow({ level: 0, origin: sub(end, scale(endT, endR * 0.8)), dir, len, radFn: t => lerp(r0, r1, t),
+        gnarl: P.trunkGnarl * 0.6, gravity: 0, up: 0.35, segs: Math.max(4, Math.round(trunkSegs * (1 - P.forkAt)) + 1),
+        seed: hash(P.seed, 100 + i), flexBase: 0, flexK: 0.008, gT0: P.forkAt, gT1: 1 }));
+    }
+  }
+
+  // ---- branch levels ----
+  const branches = stems.slice();
+  const levelCounts = [stems.length, 0, 0, 0];
+  let capped = false;
+
+  function spawnOn(par, lvl, n, tA, tB) {
+    const L = P.levels[lvl - 1], kids = [];
+    if (n <= 0 || tB <= tA) return kids;
+    const r = mulberry32(hash(par.seed, lvl * 977));
+    const whorl = Math.max(1, Math.round(L.whorl));
+    const nodes = Math.ceil(n / whorl);
+    const az0 = r() * TAU;
+    for (let ni = 0; ni < nodes; ni++) {
+      const jit = (r() - 0.5) * (whorl > 1 ? 0.25 : 0.7);
+      const tt = tA + (tB - tA) * Math.min(0.97, (ni + 0.5 + jit) / nodes);
+      const s = sampleBranch(par, tt);
+      const inNode = Math.min(whorl, n - ni * whorl);
+      for (let wi = 0; wi < inNode; wi++) {
+        if (branches.length + kids.length >= MAXB) { capped = true; return kids; }
+        const az = az0 + ni * (whorl > 1 ? 0.62 : 2.39996) + wi * TAU / whorl + (r() - 0.5) * 0.5;
+        let radial = add(scale(s.N, Math.cos(az)), scale(s.B, Math.sin(az)));
+        const flat = TW ? Math.max(L.flatten, 0.8) : L.flatten;
+        if (flat > 0) {
+          let side = cross(s.T, TW ? [0, 0, 1] : UP);
+          side = vlen(side) < 1e-3 ? s.N : norm(side);
+          const sg = dot(radial, side) >= 0 ? 1 : -1;
+          radial = norm(lerp3(radial, scale(side, sg), flat));
+        }
+        let lenC, shapeF = 1, angle = L.angle;
+        if (lvl === 1 && !TW) {
+          const g = par.gT0 + tt * (par.gT1 - par.gT0);
+          const crownPos = clamp((g - L.start) / Math.max(1e-3, 1 - L.start), 0, 1);
+          shapeF = Math.max(0.06, shapeRatio(P.shape, 1 - crownPos));
+          lenC = H * L.length * shapeF * (0.88 + 0.24 * r());
+          angle *= 1 - 0.3 * crownPos * crownPos;
+        } else {
+          lenC = par.len * L.length * (1 - 0.55 * tt) * (0.85 + 0.3 * r());
+        }
+        angle = angle * PI / 180 * (0.88 + 0.24 * r());
+        const dir = norm(add(scale(s.T, Math.cos(angle)), scale(radial, Math.sin(angle))));
+        const childSeed = hash(par.seed, lvl * 131 + ni * 17 + wi * 7 + 3);
+        if (lenC < 0.04) continue;
+        const r0 = Math.min(s.r * 0.85, Math.max(0.0025, s.r * L.radius * (lvl === 1 ? 0.55 + 0.45 * Math.sqrt(shapeF) : 1)));
+        const r1 = Math.max(0.0015, r0 * (lvl === levels ? 0.12 : 0.15));
+        const segs = clamp(Math.ceil(lenC / (H * 0.045) * (lvl === 1 ? 1.15 : 1)), 2, 16);
+        kids.push(grow({ level: lvl, origin: s.p, dir, len: lenC, radFn: t => lerp(r0, r1, Math.pow(t, 0.9)),
+          gnarl: L.gnarl, gravity: L.gravity * (TW ? 0.35 : 1), up: lvl === 1 && !TW ? 0.08 : 0, segs, seed: childSeed,
+          flexBase: s.flex, flexK: [0, 0.03, 0.045, 0.055][lvl], nominal: lvl === 1 ? H * L.length : par.nominal * L.length }));
+      }
+    }
+    return kids;
+  }
+
+  let frontier = stems;
+  for (let lvl = 1; lvl <= levels; lvl++) {
+    const L = P.levels[lvl - 1], next = [];
+    if (lvl === 1 && !TW) {
+      const parts = stems.map(s => {
+        const a = Math.max(s.gT0, L.start), b = s.gT1;
+        return { s, a, b, len: b > a ? s.len * (b - a) / (s.gT1 - s.gT0) : 0 };
+      });
+      const total = parts.reduce((x, q) => x + q.len, 0) || 1;
+      let carry = 0;
+      for (const q of parts) {
+        if (q.len <= 0) continue;
+        const exact = L.count * q.len / total + carry, n = Math.round(exact); carry = exact - n;
+        const tA = (q.a - q.s.gT0) / (q.s.gT1 - q.s.gT0);
+        next.push(...spawnOn(q.s, 1, n, tA, 1));
+      }
+    } else {
+      for (const par of frontier) {
+        const n = Math.round(L.count * clamp(par.len / par.nominal, 0.2, 1));
+        next.push(...spawnOn(par, lvl, n, L.start, 1));
+        if (branches.length + next.length >= MAXB) { capped = true; break; }
+      }
+    }
+    branches.push(...next);
+    levelCounts[lvl] = next.length;
+    frontier = next;
+    if (!next.length) break;
+  }
+
+  // ---- leaves ----
+  const LT = LEAF_TYPES[P.leafType] || LEAF_TYPES.oak;
+  const aspect = LT.aspect, dens = P.leafDensity, sizeBase = P.leafSize;
+  const LUP = TW ? [0, 0, 1] : UP;
+  const deciduous = !LT.evergreen;
+  const dropAmt = deciduous ? smooth(0.78, 0.99, P.season) : 0;
+  const summer = lin(P.leafColor), autumnC = lin(P.autumnColor), springC = mixc(summer, lin('#a9c94a'), 0.55);
+  const yellow = lin('#d9a520'), deepRed = lin('#8a2a14'), brown = lin('#6b4a2b');
+  const leaves = [];
+  const deepest = Math.min(levels, levelCounts.findLastIndex(c => c > 0));
+  if (dens > 0) {
+    for (const b of branches) {
+      let share = 0, tFrom = P.leafStart;
+      if (b.level === deepest && (b.level > 0 || TW)) share = 1;
+      else if (b.level === deepest - 1 && (b.level > 0 || TW)) { share = 0.6; tFrom = Math.max(0.4, P.leafStart); }
+      else continue;
+      const r = mulberry32(hash(b.seed, 4242));
+      const count = Math.floor(dens * b.len * (1 - tFrom) * share + r());
+      for (let i = 0; i < count; i++) {
+        if (leaves.length >= MAXLEAVES) { capped = true; break; }
+        const t = tFrom + (1 - tFrom) * (i + r()) / count;
+        const s = sampleBranch(b, t);
+        const az = i * 2.39996 + r() * 0.8;
+        const radial = add(scale(s.N, Math.cos(az)), scale(s.B, Math.sin(az)));
+        const la = P.leafAngle * PI / 180 * (0.8 + 0.4 * r());
+        let dir = norm(add(scale(s.T, Math.cos(la)), scale(radial, Math.sin(la))));
+        dir = norm(add(dir, scale(randUnit(r), P.leafRandom * 0.7)));
+        dir = norm(add(dir, [0, -P.leafDroop * (TW ? 0.3 : 0.8), 0]));
+        let n0 = sub(LUP, scale(dir, dot(LUP, dir)));
+        n0 = vlen(n0) < 1e-3 ? radial : norm(n0);
+        n0 = norm(add(n0, scale(randUnit(r), P.leafRandom * 0.9)));
+        n0 = sub(n0, scale(dir, dot(n0, dir)));
+        n0 = vlen(n0) < 1e-3 ? perp(dir) : norm(n0);
+        const side = cross(dir, n0);
+        const sz = sizeBase * (1 + (r() - 0.5) * 2 * P.leafSizeVar) * (0.8 + 0.2 * t);
+        // colour by season (fixed number of rng draws per leaf)
+        const th = 0.48 + r() * 0.27, ar = r(), j1 = r(), j2 = r(), dropR = r(), phase = r();
+        let c;
+        if (LT.colored || LT.evergreen) c = summer.slice();
+        else {
+          c = P.season < 0.25 ? mixc(springC, summer, smooth(0, 0.25, P.season)) : summer.slice();
+          const kk = smooth(th, th + 0.08, P.season);
+          if (kk > 0) {
+            let ac = ar > 0.86 ? mixc(autumnC, deepRed, 0.5) : mixc(autumnC, yellow, ar * 0.75);
+            ac = mixc(ac, brown, smooth(0.82, 0.98, P.season) * 0.7);
+            c = mixc(c, ac, kk);
+          }
+        }
+        const jv = 1 + (j1 - 0.5) * 0.55 * P.colorVar, hv = (j2 - 0.5) * 0.3 * P.colorVar;
+        c = [c[0] * jv * (1 + hv), c[1] * jv, c[2] * jv * (1 - hv)];
+        if (dropR < dropAmt) continue;
+        leaves.push({ p: add(s.p, scale(radial, s.r * 0.9)), dir, n: n0, side, L: sz, W: sz * aspect, col: c, flex: s.flex, phase });
+      }
+    }
+  }
+
+  // ---- crown volume (for ambient occlusion and canopy normals) ----
+  const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+  const grow3 = p => { for (let i = 0; i < 3; i++) { if (p[i] < mn[i]) mn[i] = p[i]; if (p[i] > mx[i]) mx[i] = p[i]; } };
+  if (leaves.length > 20) for (const l of leaves) grow3(l.p);
+  else for (const b of branches) if (b.level > 0 || branches.length === 1) for (const p of b.pts) grow3(p);
+  if (!isFinite(mn[0])) for (const p of trunk.pts) grow3(p);
+  const cc = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+  const cr = [Math.max(0.4, (mx[0] - mn[0]) / 2), Math.max(0.4, (mx[1] - mn[1]) / 2), Math.max(0.4, (mx[2] - mn[2]) / 2)];
+  let area = 0; for (const l of leaves) area += l.L * l.W * 0.55;
+  const shell = 4 * PI * Math.pow(cr[0] * cr[1] * cr[2], 2 / 3);
+  const aoStr = clamp(area / shell * 0.45, 0.12, 1);
+  const aoAt = (p, k) => {
+    const qx = (p[0] - cc[0]) / cr[0], qy = (p[1] - cc[1]) / cr[1], qz = (p[2] - cc[2]) / cr[2];
+    const q = Math.sqrt(qx * qx + qy * qy + qz * qz);
+    let a = 1 - aoStr * k * (1 - smooth(0, 1, q)) * 0.75;
+    a *= 0.9 + 0.1 * clamp(qy * 0.5 + 0.5, 0, 1);
+    if (!TW) a *= 0.62 + 0.38 * smooth(-0.2, 0.8, p[1]);
+    return clamp(a, 0.15, 1);
+  };
+  const bendW = y => H * 0.01 * Math.pow(clamp(y / H, 0, 1.5), 2);
+
+  // ---- branch cards: which level gets replaced, and the twig they are baked from ----
+  const cardsOn = !TW && P.style === 'cards' && levels >= 1;
+  const cut = clamp(Math.round(P.cardLevel), 1, Math.max(1, levels));
+  let cardSpecs = null, twig = null;
+  if (cardsOn) {
+    cardSpecs = []; const lens = [], rads = [];
+    for (const b of branches) if (b.level === cut) {
+      const base = b.pts[0], tip = b.pts[b.pts.length - 1], ch = sub(tip, base), cl = vlen(ch);
+      if (cl < 0.02) continue;
+      cardSpecs.push({ base, D: scale(ch, 1 / cl), chordLen: cl, flex0: b.flex[0], flex1: b.flex[b.flex.length - 1], ao: aoAt(lerp3(base, tip, 0.5), 0.8), seed: b.seed });
+      lens.push(b.len); rads.push(b.rad[0]);
+    }
+    const med = a => { const q = a.slice().sort((x, y) => x - y); return q.length ? q[q.length >> 1] : 0; };
+    const q2 = v => { if (!(v > 0)) return 0.01; const e = Math.pow(10, Math.floor(Math.log10(v)) - 1); return Math.round(v / e) * e; };
+    twig = { cut, len: q2(med(lens) || 0.5), r: q2(med(rads) || 0.01) };
+  }
+  const resample = (b, segs) => {
+    if (segs >= b.pts.length - 1) return b;
+    const o = Object.assign({}, b, { pts: [], T: [], N: [], B: [], rad: [], flex: [], cum: [] });
+    for (let k = 0; k <= segs; k++) {
+      const t = k / segs, s = sampleBranch(b, t);
+      o.pts.push(s.p); o.T.push(s.T); o.N.push(s.N); o.B.push(s.B); o.rad.push(s.r); o.flex.push(s.flex); o.cum.push(t * b.len);
+    }
+    return o;
+  };
+
+  // ---- bark mesh ----
+  const bp = [], bn = [], bt = [], bu = [], bw = [], bc = [], bi = [];
+  const barkScale = Math.max(0.05, P.barkScale);
+  for (const b0 of branches) {
+    if (cardsOn && b0.level >= cut) continue;
+    const b = resample(b0, Math.max(1, Math.round((b0.pts.length - 1) * det)));
+    const n = b.pts.length, rad = b.radial;
+    const uRep = Math.max(1, Math.round(TAU * b.rad[0] / barkScale));
+    const vOff = (b.seed % 1000) / 1000 * 3;
+    const ph = (b.seed % 628) / 100;
+    const base = bp.length / 3;
+    for (let i = 0; i < n; i++) {
+      const p = b.pts[i], T = b.T[i], N = b.N[i], B = b.B[i], r = b.rad[i];
+      const i0 = Math.max(0, i - 1), i1 = Math.min(n - 1, i + 1);
+      const slope = (b.rad[i1] - b.rad[i0]) / Math.max(1e-6, b.cum[i1] - b.cum[i0]);
+      const ao = aoAt(p, 0.8), bend = bendW(p[1]), fl = b.flex[i], v = b.cum[i] / barkScale + vOff;
+      const f = b.isTrunk ? Math.pow(clamp(1 - p[1] / flareH, 0, 1.2), 2) : 0;
+      for (let j = 0; j <= rad; j++) {
+        const th = j / rad * TAU, c = Math.cos(th), s = Math.sin(th);
+        const dx = N[0] * c + B[0] * s, dy = N[1] * c + B[1] * s, dz = N[2] * c + B[2] * s;
+        let rr = r;
+        if (b.isTrunk) {
+          rr *= 1 + P.flare * 0.6 * f * Math.pow(0.5 + 0.5 * Math.cos(5 * th + ph), 3) - P.flare * 0.15 * f;
+          rr *= 1 + 0.1 * P.trunkGnarl * (vnoise3(p[0] * 2.2 + dx * 1.6, p[1] * 1.3, p[2] * 2.2 + dz * 1.6) - 0.5);
+        }
+        bp.push(p[0] + dx * rr, p[1] + dy * rr, p[2] + dz * rr);
+        const nx = dx - T[0] * slope, ny = dy - T[1] * slope, nz = dz - T[2] * slope, nl = Math.hypot(nx, ny, nz) || 1;
+        bn.push(nx / nl, ny / nl, nz / nl);
+        bt.push(-N[0] * s + B[0] * c, -N[1] * s + B[1] * c, -N[2] * s + B[2] * c);
+        bu.push(j / rad * uRep, v);
+        bw.push(bend, fl, 0, 0);
+        bc.push(ao, ao, ao);
+      }
+    }
+    for (let i = 0; i < n - 1; i++) for (let j = 0; j < rad; j++) {
+      const a = base + i * (rad + 1) + j, b1 = a + 1, c = a + rad + 1, d = c + 1;
+      bi.push(a, b1, c, b1, d, c);
+    }
+    // tip cap
+    const last = b.pts[n - 1], T = b.T[n - 1], rl = b.rad[n - 1], ci = bp.length / 3;
+    bp.push(last[0] + T[0] * rl * 0.6, last[1] + T[1] * rl * 0.6, last[2] + T[2] * rl * 0.6);
+    bn.push(T[0], T[1], T[2]); bt.push(b.N[n - 1][0], b.N[n - 1][1], b.N[n - 1][2]);
+    bu.push(0.5 * uRep, (b.cum[n - 1] + rl) / barkScale + vOff); bw.push(bendW(last[1]), b.flex[n - 1], 0, 0);
+    const aol = aoAt(last, 0.8); bc.push(aol, aol, aol);
+    const lr = base + (n - 1) * (rad + 1);
+    for (let j = 0; j < rad; j++) bi.push(lr + j, lr + j + 1, ci);
+  }
+
+  // ---- leaf mesh ----
+  const lp = [], ln = [], la = [], lu = [], lw = [], lc = [], li = [];
+  const fold = 0.16, curl = P.leafDroop * 0.3;
+  for (const L of (cardsOn ? [] : leaves)) {
+    const base = lp.length / 3;
+    const ao = aoAt(L.p, 1);
+    for (let a = 0; a <= 2; a++) {
+      const v = a / 2;
+      for (let q = 0; q <= 2; q++) {
+        const u = q / 2;
+        const x = (u - 0.5) * L.W, y = v * L.L;
+        const off = Math.abs(u - 0.5) * 2 * L.W * fold - curl * v * v * L.L;
+        const p = [L.p[0] + L.dir[0] * y + L.side[0] * x + L.n[0] * off,
+                   L.p[1] + L.dir[1] * y + L.side[1] * x + L.n[1] * off,
+                   L.p[2] + L.dir[2] * y + L.side[2] * x + L.n[2] * off];
+        let ng = norm(sub(L.n, scale(L.side, (u - 0.5) * 0.6)));
+        const cn = norm([(p[0] - cc[0]) / cr[0], (p[1] - cc[1]) / cr[1], (p[2] - cc[2]) / cr[2]]);
+        if (dot(ng, cn) < 0) ng = scale(ng, -1);
+        const nb = norm(add(scale(ng, 0.45), scale(cn, 0.55)));
+        lp.push(p[0], p[1], p[2]); ln.push(nb[0], nb[1], nb[2]);
+        la.push(ao, 0, 0); lu.push(u, 1 - v);
+        lw.push(bendW(p[1]), L.flex, v * L.L * 0.12, L.phase);
+        lc.push(L.col[0], L.col[1], L.col[2]);
+      }
+    }
+    for (let a = 0; a < 2; a++) for (let q = 0; q < 2; q++) {
+      const i0 = base + a * 3 + q;
+      li.push(i0, i0 + 1, i0 + 4, i0, i0 + 4, i0 + 3);
+    }
+  }
+
+  // ---- stats ----
+  const bmin = [Infinity, Infinity, Infinity], bmax = [-Infinity, -Infinity, -Infinity];
+  const ext = arr => { for (let i = 0; i < arr.length; i += 3) for (let k = 0; k < 3; k++) { const v = arr[i + k]; if (v < bmin[k]) bmin[k] = v; if (v > bmax[k]) bmax[k] = v; } };
+  ext(bp); ext(lp);
+  if (!TW) bmin[1] = Math.max(bmin[1], 0);
+  let dbh = 0;
+  if (H >= 1.3) {
+    for (let i = 0; i < trunk.pts.length - 1; i++) {
+      const a = trunk.pts[i][1], b = trunk.pts[i + 1][1];
+      if (a <= 1.3 && b >= 1.3) { dbh = 2 * lerp(trunk.rad[i], trunk.rad[i + 1], (1.3 - a) / Math.max(1e-6, b - a)); break; }
+    }
+  }
+  if (!dbh && H >= 1.3) dbh = 2 * rT(1.3 / H);
+  const crownSpread = leaves.length > 20 ? Math.max(mx[0] - mn[0], mx[2] - mn[2]) : Math.max(bmax[0] - bmin[0], bmax[2] - bmin[2]);
+  return {
+    bark: { pos: new Float32Array(bp), nrm: new Float32Array(bn), tan: new Float32Array(bt), uv: new Float32Array(bu),
+      wind: new Float32Array(bw), col: new Float32Array(bc), idx: new Uint32Array(bi) },
+    leaves: { pos: new Float32Array(lp), nrm: new Float32Array(ln), tan: new Float32Array(la), uv: new Float32Array(lu),
+      wind: new Float32Array(lw), col: new Float32Array(lc), idx: new Uint32Array(li) },
+    bounds: { min: bmin, max: bmax }, crown: { c: cc, r: cr, ao: aoStr }, cardSpecs, twig, tip: trunk.pts[trunk.pts.length - 1],
+    stats: { height: bmax[1], dbh, crown: crownSpread, branches: branches.length, leaves: cardsOn ? 0 : leaves.length,
+      tris: (bi.length + li.length) / 3, verts: (bp.length + lp.length) / 3, trunkR: R, capped, levelCounts },
+    ms: performance.now() - t0,
+  };
+}
+
+// =====================================================================
+//  Procedural textures
+// =====================================================================
+const W1 = new Float32Array(3), W2 = new Float32Array(3);
+const BARK_FN = {
+  oak(u, v, o) {
+    const wu = u + (pfbm(u, v, 3, 2, 3, 11) - 0.5) * 0.12, wv = v + (pfbm(u, v, 2, 3, 3, 12) - 0.5) * 0.12;
+    worley(wu, wv, 10, 3, 5, W1);
+    const e = W1[1] - W1[0], ridge = smooth(0, 0.3, e);
+    const fine = pfbm(u, v, 32, 10, 4, 13);
+    const crack = smooth(0.015, 0.06, Math.abs(pfbm(u, v, 8, 2, 3, 14) - 0.5));
+    const h = ridge * (0.62 + 0.38 * fine) * (0.7 + 0.3 * crack);
+    const tone = 0.5 * pfbm(u, v, 4, 4, 3, 15) + 0.5 * W1[2];
+    let r = lerp(0.29, 0.43, tone), g = lerp(0.25, 0.38, tone), b = lerp(0.21, 0.33, tone);
+    const k = Math.pow(h, 0.8);
+    r = lerp(0.11, r, k); g = lerp(0.085, g, k); b = lerp(0.07, b, k);
+    const lc = smooth(0.6, 0.7, pfbm(u, v, 8, 8, 3, 16)) * ridge * 0.55;
+    r = lerp(r, 0.6, lc); g = lerp(g, 0.63, lc); b = lerp(b, 0.5, lc);
+    const m = 0.86 + 0.28 * fine;
+    o[0] = h; o[1] = r * m; o[2] = g * m; o[3] = b * m;
+  },
+  pine(u, v, o) {
+    const wu = u + (pfbm(u, v, 3, 3, 3, 21) - 0.5) * 0.06, wv = v + (pfbm(u, v, 3, 3, 3, 22) - 0.5) * 0.06;
+    worley(wu, wv, 6, 5, 23, W1);
+    const plate = smooth(0.03, 0.22, W1[1] - W1[0]);
+    worley(u, v, 18, 14, 24, W2);
+    const flake = smooth(0, 0.16, W2[1] - W2[0]);
+    const fine = pfbm(u, v, 32, 32, 3, 25);
+    const h = plate * (0.6 + 0.25 * flake + 0.15 * fine);
+    const tone = W1[2] * 0.6 + fine * 0.4;
+    let r = lerp(0.36, 0.5, tone), g = lerp(0.26, 0.37, tone), b = lerp(0.2, 0.28, tone);
+    const grey = (1 - flake) * 0.45 * plate;
+    r = lerp(r, 0.45, grey); g = lerp(g, 0.4, grey); b = lerp(b, 0.36, grey);
+    const k = Math.pow(plate, 0.9);
+    r = lerp(0.12, r, k); g = lerp(0.08, g, k); b = lerp(0.06, b, k);
+    o[0] = h; o[1] = r; o[2] = g; o[3] = b;
+  },
+  birch(u, v, o) {
+    const base = 0.92 + 0.08 * pfbm(u, v, 4, 8, 4, 31);
+    let r = 0.9 * base, g = 0.88 * base, b = 0.82 * base, h = 0.6 + 0.1 * pfbm(u, v, 8, 16, 3, 36);
+    const peel = smooth(0.55, 0.72, pfbm(u, v, 2, 48, 3, 32));
+    r = lerp(r, 0.78, peel * 0.6); g = lerp(g, 0.76, peel * 0.6); b = lerp(b, 0.72, peel * 0.6); h -= peel * 0.08;
+    worley(u, v, 9, 44, 33, W1);
+    const dash = (1 - smooth(0.1, 0.2, W1[0])) * (W1[2] < 0.55 ? 1 : 0);
+    r = lerp(r, 0.25, dash); g = lerp(g, 0.22, dash); b = lerp(b, 0.21, dash); h -= dash * 0.4;
+    const patch = smooth(0.63, 0.69, pfbm(u, v, 3, 3, 4, 34));
+    if (patch > 0) {
+      const cr = pfbm(u, v, 12, 6, 3, 35);
+      const pr = lerp(0.14, 0.26, cr);
+      r = lerp(r, pr, patch); g = lerp(g, pr * 0.95, patch); b = lerp(b, pr * 0.9, patch);
+      h = lerp(h, 0.25 + cr * 0.5, patch);
+    }
+    o[0] = clamp(h, 0, 1); o[1] = r; o[2] = g; o[3] = b;
+  },
+  cherry(u, v, o) {
+    const t = pfbm(u, v, 3, 6, 4, 41);
+    let r = lerp(0.25, 0.35, t), g = lerp(0.13, 0.18, t), b = lerp(0.11, 0.14, t);
+    const ring = 0.5 + 0.5 * Math.sin((v * 16 + pfbm(u, v, 2, 4, 2, 43) * 1.5) * TAU);
+    const rm = 0.9 + 0.1 * ring; r *= rm; g *= rm; b *= rm;
+    worley(u, v, 5, 26, 42, W1);
+    const dash = (1 - smooth(0.12, 0.24, W1[0])) * (W1[2] < 0.7 ? 1 : 0);
+    r = lerp(r, 0.56, dash); g = lerp(g, 0.43, dash); b = lerp(b, 0.33, dash);
+    const streak = pfbm(u, v, 40, 2, 2, 44);
+    const sm = 0.92 + 0.12 * streak; r *= sm; g *= sm; b *= sm;
+    o[0] = clamp(0.5 + 0.1 * t + dash * 0.25 - (1 - ring) * 0.05, 0, 1); o[1] = r; o[2] = g; o[3] = b;
+  },
+  beech(u, v, o) {
+    const m = pfbm(u, v, 3, 3, 5, 51);
+    let r = lerp(0.42, 0.64, m), g = lerp(0.42, 0.64, m), b = lerp(0.39, 0.6, m);
+    const sp = smooth(0.64, 0.7, pfbm(u, v, 16, 16, 3, 52));
+    r = lerp(r, 0.32, sp); g = lerp(g, 0.33, sp); b = lerp(b, 0.3, sp);
+    const lc = smooth(0.63, 0.7, pfbm(u, v, 6, 6, 3, 53));
+    r = lerp(r, 0.6, lc * 0.7); g = lerp(g, 0.64, lc * 0.7); b = lerp(b, 0.54, lc * 0.7);
+    const wr = smooth(0.47, 0.5, pfbm(u, v, 4, 30, 2, 54)) * (1 - smooth(0.5, 0.53, pfbm(u, v, 4, 30, 2, 54)));
+    r *= 1 - wr * 0.15; g *= 1 - wr * 0.15; b *= 1 - wr * 0.15;
+    o[0] = 0.5 + 0.15 * m + 0.05 * pfbm(u, v, 24, 24, 2, 55) - wr * 0.1 + lc * 0.08; o[1] = r; o[2] = g; o[3] = b;
+  },
+  weathered(u, v, o) {
+    const t = pfbm(u, v, 4, 2, 4, 61);
+    let r = lerp(0.38, 0.55, t), g = lerp(0.36, 0.53, t), b = lerp(0.33, 0.49, t);
+    const fiber = pfbm(u, v, 64, 3, 3, 62);
+    const fm = 0.85 + 0.3 * fiber; r *= fm; g *= fm; b *= fm;
+    const wu = u + (pfbm(u, v, 2, 4, 3, 63) - 0.5) * 0.08;
+    worley(wu, v, 14, 2, 64, W1);
+    const crack = 1 - smooth(0, 0.06, W1[1] - W1[0]);
+    r = lerp(r, 0.16, crack); g = lerp(g, 0.14, crack); b = lerp(b, 0.13, crack);
+    o[0] = clamp(0.6 + 0.2 * fiber - 0.6 * crack, 0, 1); o[1] = r; o[2] = g; o[3] = b;
+  },
+};
+
+function genBark(type, S) {
+  const fn = BARK_FN[type] || BARK_FN.oak, o = new Float32Array(4);
+  const Hh = new Float32Array(S * S), alb = new Uint8Array(S * S * 4), nrm = new Uint8Array(S * S * 4);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    fn((x + 0.5) / S, (y + 0.5) / S, o);
+    const i = y * S + x;
+    Hh[i] = o[0];
+    alb[i * 4] = clamp(o[1], 0, 1) * 255; alb[i * 4 + 1] = clamp(o[2], 0, 1) * 255; alb[i * 4 + 2] = clamp(o[3], 0, 1) * 255;
+    alb[i * 4 + 3] = clamp(o[0], 0, 1) * 255;
+  }
+  const k = 3.2 * S / 512;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const xl = (x + S - 1) % S, xr = (x + 1) % S, yu = (y + S - 1) % S, yd = (y + 1) % S;
+    const dx = (Hh[y * S + xr] - Hh[y * S + xl]) * k, dy = (Hh[yd * S + x] - Hh[yu * S + x]) * k;
+    const l = Math.hypot(dx, dy, 1), i = (y * S + x) * 4;
+    nrm[i] = (-dx / l * 0.5 + 0.5) * 255; nrm[i + 1] = (-dy / l * 0.5 + 0.5) * 255; nrm[i + 2] = (1 / l * 0.5 + 0.5) * 255; nrm[i + 3] = 255;
+  }
+  return { size: S, alb, nrm };
+}
+
+function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+
+const BLADES = {
+  oak: { w: s => 0.4 * Math.pow(Math.sin(PI * s), 0.65) * (0.48 + 0.62 * s) * (0.55 + 0.45 * Math.pow(Math.abs(Math.sin(s * PI * 4.5 + 0.35)), 0.6)), veins: 6, base: 0.9 },
+  birch: { w: s => 0.42 * Math.pow(Math.sin(PI * s), 0.9) * (1.12 - 0.72 * s) * (1 + 0.06 * (Math.abs(Math.sin(s * PI * 24)) - 0.5)), veins: 8, base: 0.86 },
+  willow: { w: s => 0.44 * Math.pow(Math.sin(PI * s), 0.7) * (1.05 - 0.3 * s) * (1 + 0.03 * (Math.abs(Math.sin(s * PI * 30)) - 0.5)), veins: 12, base: 0.95 },
+};
+function speckle(g, S, r) {
+  for (let i = 0; i < S * 3; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
+    const d = S * 0.004 * (0.5 + r()); g.fillRect(r() * S, r() * S, d, d);
+  }
+}
+function drawBlade(g, S, r, sp) {
+  const cx = S / 2, y0 = S * sp.base, y1 = S * 0.03, len = y0 - y1, N = 200;
+  const path = new Path2D();
+  path.moveTo(cx, y0);
+  for (let i = 1; i <= N; i++) { const s = i / N; path.lineTo(cx + sp.w(s) * S, y0 - s * len); }
+  for (let i = N - 1; i >= 1; i--) { const s = i / N; path.lineTo(cx - sp.w(s) * S * 0.97, y0 - s * len); }
+  path.closePath();
+  const gr = g.createLinearGradient(0, 0, S, 0);
+  gr.addColorStop(0, '#a9a9a9'); gr.addColorStop(0.5, '#e6e6e6'); gr.addColorStop(1, '#b4b4b4');
+  g.fillStyle = gr; g.fill(path);
+  g.save(); g.clip(path);
+  const gv = g.createLinearGradient(0, y1, 0, y0);
+  gv.addColorStop(0, 'rgba(255,255,255,0.08)'); gv.addColorStop(1, 'rgba(0,0,0,0.12)');
+  g.fillStyle = gv; g.fillRect(0, 0, S, S);
+  speckle(g, S, r);
+  g.strokeStyle = 'rgba(255,255,255,0.32)'; g.lineWidth = S * 0.006; g.lineCap = 'round';
+  for (let k = 1; k <= sp.veins; k++) {
+    const s = k / (sp.veins + 1) * 0.92 + 0.03, s2 = Math.min(1, s + 0.13);
+    for (const side of [1, -1]) {
+      g.beginPath(); g.moveTo(cx, y0 - s * len);
+      g.quadraticCurveTo(cx + side * sp.w(s) * S * 0.5, y0 - (s + 0.04) * len, cx + side * sp.w(s2) * S * 0.92, y0 - s2 * len);
+      g.stroke();
+    }
+  }
+  g.lineWidth = S * 0.035; g.strokeStyle = 'rgba(30,30,30,0.22)'; g.stroke(path);
+  g.restore();
+  g.lineCap = 'round';
+  g.strokeStyle = 'rgba(245,245,245,0.7)'; g.lineWidth = S * 0.011;
+  g.beginPath(); g.moveTo(cx, y0); g.lineTo(cx, y1 + len * 0.06); g.stroke();
+  g.strokeStyle = '#9c9c9c'; g.lineWidth = S * 0.016;
+  g.beginPath(); g.moveTo(cx, S * 0.995); g.lineTo(cx, y0); g.stroke();
+}
+function drawMaple(g, S, r) {
+  const cx = S / 2, cy = S * 0.57, R = S * 0.43, n = 7, span = PI * 0.82, M = 480;
+  const rf = phi => {
+    const a = Math.abs(phi), k = phi / span * (n - 1) / 2;
+    const lobe = Math.pow(Math.abs(Math.cos(PI * k)), 5);
+    const env = a <= span ? 1 - 0.5 * Math.pow(a / span, 2) : 0.5 * (1 - smooth(span, span + 0.35, a));
+    return R * (0.24 * (1 - 0.7 * smooth(span, PI, a)) + 0.76 * lobe * env) * (1 + 0.02 * Math.sin(phi * 110));
+  };
+  const path = new Path2D();
+  for (let i = 0; i <= M; i++) {
+    const phi = -PI + i / M * TAU, rr = rf(phi);
+    const x = cx + rr * Math.sin(phi), y = cy - rr * Math.cos(phi);
+    if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
+  }
+  path.closePath();
+  const gr = g.createRadialGradient(cx, cy, 0, cx, cy, R);
+  gr.addColorStop(0, '#ececec'); gr.addColorStop(0.6, '#cfcfcf'); gr.addColorStop(1, '#a8a8a8');
+  g.fillStyle = gr; g.fill(path);
+  g.save(); g.clip(path);
+  speckle(g, S, r);
+  g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineCap = 'round';
+  for (let j = 0; j < n; j++) {
+    const phi = -span + j * 2 * span / (n - 1), rr = rf(phi) * 0.94;
+    g.lineWidth = S * 0.008;
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + rr * Math.sin(phi), cy - rr * Math.cos(phi)); g.stroke();
+  }
+  g.lineWidth = S * 0.03; g.strokeStyle = 'rgba(30,30,30,0.2)'; g.stroke(path);
+  g.restore();
+  g.strokeStyle = '#9a9a9a'; g.lineWidth = S * 0.014; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx, S * 0.995); g.stroke();
+}
+function drawFlower(g, x, y, rad, rot, r) {
+  for (let k = 0; k < 5; k++) {
+    g.save(); g.translate(x, y); g.rotate(rot + k * TAU / 5);
+    const p = new Path2D();
+    p.moveTo(0, 0);
+    p.bezierCurveTo(rad * 0.48, -rad * 0.15, rad * 0.58, -rad * 0.86, rad * 0.13, -rad);
+    p.lineTo(0, -rad * 0.88);
+    p.lineTo(-rad * 0.13, -rad);
+    p.bezierCurveTo(-rad * 0.58, -rad * 0.86, -rad * 0.48, -rad * 0.15, 0, 0);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, rad);
+    gr.addColorStop(0, '#ec8fac'); gr.addColorStop(0.35, '#f7c4d3'); gr.addColorStop(1, '#fff3f6');
+    g.fillStyle = gr; g.fill(p);
+    g.strokeStyle = 'rgba(205,110,140,0.25)'; g.lineWidth = rad * 0.025; g.stroke(p);
+    g.restore();
+  }
+  g.fillStyle = '#c84a6e'; g.beginPath(); g.arc(x, y, rad * 0.16, 0, TAU); g.fill();
+  g.strokeStyle = 'rgba(240,200,120,0.9)'; g.lineWidth = rad * 0.025;
+  for (let k = 0; k < 14; k++) {
+    const a = k / 14 * TAU + r() * 0.2, l = rad * (0.3 + r() * 0.12);
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+    g.fillStyle = '#f3d36b'; g.beginPath(); g.arc(x + Math.cos(a) * l, y + Math.sin(a) * l, rad * 0.035, 0, TAU); g.fill();
+  }
+}
+function drawBlossom(g, S, r) {
+  const fl = [[0.5, 0.33, 0.22, 0.2], [0.27, 0.6, 0.19, 1.1], [0.74, 0.58, 0.18, 0.6]];
+  g.strokeStyle = '#6b4a3a'; g.lineWidth = S * 0.012; g.lineCap = 'round';
+  for (const f of fl) { g.beginPath(); g.moveTo(S * 0.5, S * 0.995); g.quadraticCurveTo(S * 0.5, S * 0.75, S * f[0], S * f[1]); g.stroke(); }
+  g.beginPath(); g.moveTo(S * 0.5, S * 0.995); g.quadraticCurveTo(S * 0.55, S * 0.85, S * 0.6, S * 0.8); g.stroke();
+  g.fillStyle = '#e7a2b6'; g.beginPath(); g.ellipse(S * 0.6, S * 0.78, S * 0.035, S * 0.05, 0.4, 0, TAU); g.fill();
+  for (const f of fl) drawFlower(g, S * f[0], S * f[1], S * f[2], f[3], r);
+}
+function drawNeedle(g, S, r) {
+  const cx = S / 2;
+  g.lineCap = 'round';
+  for (let i = 0; i < 96; i++) {
+    const s = i / 96, y = S * (0.97 - s * 0.92), side = i % 2 ? 1 : -1;
+    const len = S * (0.27 - 0.12 * s) * (0.85 + 0.3 * r()), ang = (38 + r() * 20) * PI / 180;
+    const x0 = cx + S * 0.02 * s, l = 150 + r() * 85 | 0;
+    g.strokeStyle = `rgb(${l},${l},${l})`; g.lineWidth = S * 0.015;
+    g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + side * Math.sin(ang) * len, y - Math.cos(ang) * len); g.stroke();
+  }
+  g.strokeStyle = '#7a7a7a'; g.lineWidth = S * 0.018;
+  g.beginPath(); g.moveTo(cx, S); g.lineTo(cx + S * 0.02, S * 0.04); g.stroke();
+  for (let i = 0; i < 64; i++) {
+    const s = i / 64, y = S * (0.95 - s * 0.88), len = S * (0.14 - 0.06 * s), ang = (r() - 0.5) * 1.3;
+    const x0 = cx + S * 0.02 * s, l = 175 + r() * 70 | 0;
+    g.strokeStyle = `rgb(${l},${l},${l})`; g.lineWidth = S * 0.014;
+    g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + Math.sin(ang) * len, y - Math.cos(ang) * len); g.stroke();
+  }
+}
+function leafCanvas(type, S) {
+  const c = mkCanvas(S, S), g = c.getContext('2d'), r = mulberry32(99);
+  if (type === 'maple') drawMaple(g, S, r);
+  else if (type === 'blossom') drawBlossom(g, S, r);
+  else if (type === 'needle') drawNeedle(g, S, r);
+  else drawBlade(g, S, r, BLADES[type] || BLADES.oak);
+  return c;
+}
+function canvasRGBA(c) { return new Uint8Array(c.getContext('2d').getImageData(0, 0, c.width, c.height).data.buffer); }
+
+// dilate colour into transparent texels, then build coverage-preserving mip chain
+function leafMips(data, S) { dilate(data, S); return buildMips(data, S); }
+function dilate(data, S) {
+  const a0 = data, OFF = [1, 0, -1, 0, 0, 1, 0, -1];
+  for (let pass = 0; pass < 6; pass++) {
+    const src = a0.slice();
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const i = (y * S + x) * 4;
+      if (src[i + 3] > 8 || (src[i] | src[i + 1] | src[i + 2])) continue;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let q = 0; q < 8; q += 2) {
+        const xx = x + OFF[q], yy = y + OFF[q + 1]; if (xx < 0 || yy < 0 || xx >= S || yy >= S) continue;
+        const j = (yy * S + xx) * 4; if (src[j + 3] > 8 || (src[j] | src[j + 1] | src[j + 2])) { r += src[j]; g += src[j + 1]; b += src[j + 2]; n++; }
+      }
+      if (n) { a0[i] = r / n; a0[i + 1] = g / n; a0[i + 2] = b / n; }
+    }
+  }
+  let avg = [0, 0, 0], cnt = 0;
+  for (let i = 0; i < a0.length; i += 4) if (a0[i + 3] > 128) { avg[0] += a0[i]; avg[1] += a0[i + 1]; avg[2] += a0[i + 2]; cnt++; }
+  if (cnt) avg = avg.map(v => v / cnt);
+  for (let i = 0; i < a0.length; i += 4) if (a0[i + 3] <= 8 && !(a0[i] | a0[i + 1] | a0[i + 2])) { a0[i] = avg[0]; a0[i + 1] = avg[1]; a0[i + 2] = avg[2]; }
+}
+function buildMips(a0, S) {
+  const cov = (d, s) => { let c = 0; for (let i = 3; i < d.length; i += 4) if (d[i] * s > 127) c++; return c / (d.length / 4); };
+  const c0 = cov(a0, 1);
+  const levels = [{ w: S, d: a0 }];
+  let w = S, prev = a0;
+  while (w > 1) {
+    const nw = w >> 1, d = new Uint8Array(nw * nw * 4);
+    for (let y = 0; y < nw; y++) for (let x = 0; x < nw; x++) {
+      for (let k = 0; k < 4; k++) {
+        const i0 = ((2 * y) * w + 2 * x) * 4 + k, i1 = i0 + 4, i2 = i0 + w * 4, i3 = i2 + 4;
+        d[(y * nw + x) * 4 + k] = (prev[i0] + prev[i1] + prev[i2] + prev[i3]) / 4;
+      }
+    }
+    if (nw >= 4) {
+      let lo = 0.5, hi = 4;
+      for (let it = 0; it < 12; it++) { const m = (lo + hi) / 2; if (cov(d, m) < c0) lo = m; else hi = m; }
+      const s = (lo + hi) / 2;
+      for (let i = 3; i < d.length; i += 4) d[i] = Math.min(255, d[i] * s);
+    }
+    levels.push({ w: nw, d }); prev = d; w = nw;
+  }
+  return levels;
+}
+
+// =====================================================================
+//  WebGL2 renderer
+// =====================================================================
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+
+const WIND_GLSL = `
+uniform float uTime, uWind, uWindFreq;
+uniform vec2 uWindDir;
+vec3 windOffset(vec3 p, vec4 w, vec3 n){
+  float f = uWindFreq, t = uTime;
+  vec3 wd = vec3(uWindDir.x, 0.0, uWindDir.y), sd = vec3(-uWindDir.y, 0.0, uWindDir.x);
+  float gust = 0.55 + 0.45*sin(t*0.31*f)*sin(t*0.53*f + 1.7);
+  float ph = dot(p, vec3(0.31, 0.17, 0.23));
+  vec3 o = wd * w.x * uWind * (0.7*gust + 0.3*sin(t*0.9*f + 0.4));
+  float o1 = sin(t*1.9*f + ph*2.3), o2 = sin(t*3.1*f + ph*3.7 + 1.3);
+  o += (wd*(0.6*gust + 0.4*o1) + sd*(0.45*o2) + vec3(0.0, 0.25*o1*o2, 0.0)) * w.y * uWind;
+  o += n * w.z * uWind * sin(t*11.0*f + w.w*6.2831) * (0.5 + gust);
+  return o;
+}`;
+const VS_TREE = depth => `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec3 aTan;
+layout(location=3) in vec2 aUV;
+layout(location=4) in vec4 aWind;
+layout(location=5) in vec3 aCol;
+uniform mat4 uVP, uLightVP;
+uniform float uNOff;
+out vec2 vUV;
+${depth ? '' : 'out vec3 vPos; out vec3 vNrm; out vec3 vTan; out vec3 vCol; out vec4 vSh;'}
+${WIND_GLSL}
+void main(){
+  vec3 p = aPos + windOffset(aPos, aWind, aNrm);
+  vUV = aUV;
+  ${depth ? 'gl_Position = uLightVP * vec4(p, 1.0);'
+          : 'vPos = p; vNrm = aNrm; vTan = aTan; vCol = aCol; vSh = uLightVP * vec4(p + aNrm*uNOff, 1.0); gl_Position = uVP * vec4(p, 1.0);'}
+}`;
+const FS_COMMON = `
+uniform highp sampler2DShadow uShadow;
+uniform vec3 uSunDir, uSunCol, uSky, uGnd, uCam, uHorizon;
+uniform float uShadowOn, uTexel, uFogNear, uFogFar, uExposure, uBias;
+float shadowF(vec4 sc){
+  if (uShadowOn < 0.5) return 1.0;
+  vec3 p = sc.xyz / sc.w * 0.5 + 0.5;
+  if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0 || p.z > 1.0) return 1.0;
+  float s = 0.0;
+  for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++)
+    s += texture(uShadow, vec3(p.xy + vec2(float(x), float(y)) * uTexel * 1.25, p.z - uBias));
+  return s / 9.0;
+}
+vec3 tonemap(vec3 c){
+  c *= uExposure;
+  c = (c*(2.51*c + 0.03)) / (c*(2.43*c + 0.59) + 0.14);
+  return pow(clamp(c, 0.0, 1.0), vec3(1.0/2.2));
+}
+vec3 fog(vec3 c, vec3 p){ return mix(c, uHorizon, smoothstep(uFogNear, uFogFar, distance(p, uCam))); }
+`;
+const FS_BARK = `#version 300 es
+precision highp float;
+in vec3 vPos; in vec3 vNrm; in vec3 vTan; in vec2 vUV; in vec3 vCol; in vec4 vSh;
+uniform sampler2D uAlb, uNmap;
+uniform vec3 uTint;
+uniform float uRelief, uMoss, uGloss, uTreeH, uWire;
+uniform vec3 uWireCol;
+out vec4 frag;
+${FS_COMMON}
+void main(){
+  if (uWire > 0.5) { frag = vec4(uWireCol, 1.0); return; }
+  vec3 n = normalize(vNrm);
+  vec3 t = vTan - n*dot(vTan, n); t = length(t) > 1e-4 ? normalize(t) : vec3(1.0, 0.0, 0.0);
+  vec3 b = cross(n, t);
+  vec3 tn = texture(uNmap, vUV).xyz*2.0 - 1.0; tn.xy *= uRelief;
+  vec3 N = normalize(t*tn.x + b*tn.y + n*max(tn.z, 0.05));
+  vec4 al = texture(uAlb, vUV);
+  vec3 alb = al.rgb * uTint;
+  float hgt = al.a;
+  float up = N.y*0.5 + 0.5;
+  float low = 1.0 - clamp(vPos.y / uTreeH, 0.0, 1.0);
+  float m = uMoss * smoothstep(0.6, 0.9, up*0.55 + low*0.35 + hgt*0.35 + uMoss*0.25);
+  m = clamp(m * 1.6, 0.0, 1.0);
+  alb = mix(alb, vec3(0.075, 0.12, 0.03)*(0.7 + hgt*0.6), m);
+  vec3 L = uSunDir, V = normalize(uCam - vPos);
+  float sh = shadowF(vSh);
+  float ndl = max(dot(N, L), 0.0);
+  vec3 hemi = mix(uGnd, uSky, up);
+  float ao = vCol.r * mix(0.55, 1.0, hgt);
+  vec3 Hh = normalize(L + V);
+  float spec = pow(max(dot(N, Hh), 0.0), 32.0) * uGloss * (1.0 - m);
+  vec3 c = alb*(uSunCol*ndl*sh + hemi*ao) + uSunCol*spec*sh*0.3*ao;
+  frag = vec4(tonemap(fog(c, vPos)), 1.0);
+}`;
+const FS_LEAF = `#version 300 es
+precision highp float;
+in vec3 vPos; in vec3 vNrm; in vec3 vTan; in vec2 vUV; in vec3 vCol; in vec4 vSh;
+uniform sampler2D uLeaf, uLeafN;
+uniform float uCut, uA2C, uTrans, uWire, uCard;
+uniform vec3 uWireCol, uCrownC, uCrownR;
+out vec4 frag;
+${FS_COMMON}
+void main(){
+  if (uWire > 0.5) { frag = vec4(uWireCol, 1.0); return; }
+  vec4 tx = texture(uLeaf, vUV);
+  float a = tx.a;
+  if (uA2C > 0.5) { a = clamp((a - uCut) / max(fwidth(a), 1e-4) + 0.5, 0.0, 1.0); if (a < 0.02) discard; }
+  else if (a < uCut) discard;
+  vec3 alb, N; float ao;
+  if (uCard > 0.5) {
+    vec3 nt = texture(uLeafN, vUV).xyz*2.0 - 1.0;
+    vec3 Nn = normalize(vNrm);
+    vec3 T = vTan - Nn*dot(vTan, Nn); T = length(T) > 1e-4 ? normalize(T) : vec3(1.0, 0.0, 0.0);
+    N = normalize(T*nt.x + cross(Nn, T)*nt.y + Nn*max(nt.z, 0.05));
+    if (!gl_FrontFacing) N = -N;
+    N = normalize(mix(N, normalize((vPos - uCrownC) / max(uCrownR, vec3(0.1))), 0.4));
+    alb = tx.rgb; ao = vCol.r;
+  } else { alb = tx.rgb * vCol; N = normalize(vNrm); ao = vTan.x; }
+  vec3 L = uSunDir, V = normalize(uCam - vPos);
+  float sh = shadowF(vSh);
+  float wrap = clamp((dot(N, L) + 0.35) / 1.35, 0.0, 1.0);
+  float back = pow(clamp(dot(-V, L), 0.0, 1.0), 3.0);
+  vec3 hemi = mix(uGnd, uSky, N.y*0.5 + 0.5);
+  float sheen = pow(max(dot(reflect(-L, N), V), 0.0), 16.0) * 0.08;
+  vec3 c = alb*(uSunCol*wrap*sh*mix(0.5, 1.0, ao) + hemi*ao) + alb*uSunCol*back*uTrans*sh*(0.4 + 0.6*ao) + uSunCol*sheen*sh*ao;
+  frag = vec4(tonemap(fog(c, vPos)), a);
+}`;
+const FS_DEPTH_BARK = `#version 300 es
+precision mediump float;
+void main(){}`;
+const FS_DEPTH_LEAF = `#version 300 es
+precision mediump float;
+in vec2 vUV;
+uniform sampler2D uLeaf;
+uniform float uCut;
+void main(){ if (texture(uLeaf, vUV).a < uCut) discard; }`;
+const VS_GROUND = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+uniform mat4 uVP, uLightVP;
+uniform float uNOff, uGR;
+out vec3 vPos; out vec4 vSh;
+void main(){ vec3 wp = aPos * vec3(uGR, 1.0, uGR); vPos = wp; vSh = uLightVP * vec4(wp + vec3(0.0, uNOff, 0.0), 1.0); gl_Position = uVP * vec4(wp, 1.0); }`;
+const FS_GROUND = `#version 300 es
+precision highp float;
+in vec3 vPos; in vec4 vSh;
+uniform vec3 uGrassA, uGrassB;
+uniform vec4 uCrown;
+uniform float uTrunkR;
+out vec4 frag;
+${FS_COMMON}
+float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x*p.y); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f);
+  return mix(mix(hash(i), hash(i + vec2(1,0)), f.x), mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y); }
+void main(){
+  vec2 q = vPos.xz;
+  float n = vn(q*0.35)*0.5 + vn(q*1.7)*0.3 + vn(q*7.0)*0.2;
+  vec3 base = mix(uGrassA, uGrassB, n);
+  float sh = shadowF(vSh);
+  float r = length(q);
+  float cont = 1.0 - 0.4*exp(-r*r / max(uTrunkR*uTrunkR*25.0, 0.01));
+  float canopy = 1.0 - uCrown.w * 0.35 * (1.0 - smoothstep(0.0, uCrown.z*1.15, length(q - uCrown.xy)));
+  vec3 c = base * (uSunCol*max(uSunDir.y, 0.0)*sh + uSky*0.9*canopy) * cont;
+  frag = vec4(tonemap(fog(c, vPos)), 1.0);
+}`;
+const VS_SKY = `#version 300 es
+precision highp float;
+out vec2 vNdc;
+void main(){ vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)); vNdc = p*2.0 - 1.0; gl_Position = vec4(vNdc, 0.9999, 1.0); }`;
+const FS_SKY = `#version 300 es
+precision highp float;
+in vec2 vNdc;
+uniform mat4 uInvVP;
+uniform vec3 uZenith, uSunDir, uSunCol, uCam, uHorizon;
+uniform float uExposure, uSunDisk;
+out vec4 frag;
+vec3 tonemap(vec3 c){ c *= uExposure; c = (c*(2.51*c + 0.03)) / (c*(2.43*c + 0.59) + 0.14); return pow(clamp(c, 0.0, 1.0), vec3(1.0/2.2)); }
+void main(){
+  vec4 w = uInvVP * vec4(vNdc, 1.0, 1.0);
+  vec3 dir = normalize(w.xyz / w.w - uCam);
+  float h = max(dir.y, 0.0);
+  vec3 col = mix(uHorizon, uZenith, pow(h, 0.55));
+  float sd = max(dot(dir, uSunDir), 0.0);
+  col += uSunCol * (pow(sd, 900.0) * 1.2 * uSunDisk + pow(sd, 10.0) * 0.05);
+  frag = vec4(tonemap(col), 1.0);
+}`;
+
+const VS_BAKE = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec3 aTan;
+layout(location=3) in vec2 aUV;
+layout(location=5) in vec3 aCol;
+uniform mat4 uVP;
+out vec3 vNrm; out vec3 vTan; out vec2 vUV; out vec3 vCol;
+void main(){ vNrm = aNrm; vTan = aTan; vUV = aUV; vCol = aCol; gl_Position = uVP * vec4(aPos, 1.0); }`;
+const FS_BAKE = `#version 300 es
+precision highp float;
+in vec3 vNrm; in vec3 vTan; in vec2 vUV; in vec3 vCol;
+uniform sampler2D uTex;
+uniform int uLeafMode, uOut;
+uniform vec3 uTint;
+out vec4 frag;
+void main(){
+  vec4 tx = texture(uTex, vUV);
+  vec3 alb, n = normalize(vNrm);
+  if (uLeafMode == 1) { if (tx.a < 0.5) discard; alb = tx.rgb * vCol * vTan.x; n.z = abs(n.z)*0.8 + 0.2; n = normalize(n); }
+  else { alb = tx.rgb * uTint * vCol.r; n.z = max(n.z, 0.0) + 0.001; n = normalize(n); }
+  if (uOut == 0) frag = vec4(pow(clamp(alb, 0.0, 1.0), vec3(1.0/2.2)), 1.0);
+  else frag = vec4(n*0.5 + 0.5, 1.0);
+}`;
+
+function compile(vs, fs) {
+  const mk = (type, src) => {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src.split('\n').map((l, i) => (i + 1) + ': ' + l).join('\n'));
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return { p, loc: {} };
+}
+function uloc(pr, n) { if (!(n in pr.loc)) pr.loc[n] = gl.getUniformLocation(pr.p, n); return pr.loc[n]; }
+function setU(pr, u) {
+  for (const k in u) {
+    const l = uloc(pr, k); if (l === null) continue;
+    const v = u[k];
+    if (typeof v === 'number') gl.uniform1f(l, v);
+    else if (v.length === 2) gl.uniform2fv(l, v);
+    else if (v.length === 3) gl.uniform3fv(l, v);
+    else if (v.length === 4) gl.uniform4fv(l, v);
+    else if (v.length === 16) gl.uniformMatrix4fv(l, false, v);
+  }
+}
+function setI(pr, u) { for (const k in u) { const l = uloc(pr, k); if (l !== null) gl.uniform1i(l, u[k]); } }
+
+const M4 = {
+  persp(fovy, asp, n, f) { const t = 1 / Math.tan(fovy / 2), nf = 1 / (n - f); return new Float32Array([t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) * nf, -1, 0, 0, 2 * f * n * nf, 0]); },
+  ortho(l, r, b, t, n, f) { const lr = 1 / (l - r), bt = 1 / (b - t), nf = 1 / (n - f); return new Float32Array([-2 * lr, 0, 0, 0, 0, -2 * bt, 0, 0, 0, 0, 2 * nf, 0, (l + r) * lr, (t + b) * bt, (f + n) * nf, 1]); },
+  lookAt(e, c, up) {
+    const z = norm(sub(e, c)); let x = cross(up, z); x = vlen(x) < 1e-6 ? [1, 0, 0] : norm(x); const y = cross(z, x);
+    return new Float32Array([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, e), -dot(y, e), -dot(z, e), 1]);
+  },
+  mul(a, b) { const o = new Float32Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k]; o[i * 4 + j] = s; } return o; },
+  inv(a) {
+    const [a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23, a30, a31, a32, a33] = a;
+    const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11,
+      b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30,
+      b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+    let d = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06; if (!d) return new Float32Array(16); d = 1 / d;
+    return new Float32Array([
+      (a11 * b11 - a12 * b10 + a13 * b09) * d, (a02 * b10 - a01 * b11 - a03 * b09) * d, (a31 * b05 - a32 * b04 + a33 * b03) * d, (a22 * b04 - a21 * b05 - a23 * b03) * d,
+      (a12 * b08 - a10 * b11 - a13 * b07) * d, (a00 * b11 - a02 * b08 + a03 * b07) * d, (a32 * b02 - a30 * b05 - a33 * b01) * d, (a20 * b05 - a22 * b02 + a23 * b01) * d,
+      (a10 * b10 - a11 * b08 + a13 * b06) * d, (a01 * b08 - a00 * b10 - a03 * b06) * d, (a30 * b04 - a31 * b02 + a33 * b00) * d, (a21 * b02 - a20 * b04 - a23 * b00) * d,
+      (a11 * b07 - a10 * b09 - a12 * b06) * d, (a00 * b09 - a01 * b07 + a02 * b06) * d, (a31 * b01 - a30 * b03 - a32 * b00) * d, (a20 * b03 - a21 * b01 + a22 * b00) * d]);
+  },
+};
+
+let R = null; // renderer state
+function initGL() {
+  if (!gl) return false;
+  const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+  R = {
+    aniso, maxAniso: aniso ? Math.min(8, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)) : 0,
+    samples: gl.getParameter(gl.SAMPLES),
+    bark: compile(VS_TREE(false), FS_BARK), leaf: compile(VS_TREE(false), FS_LEAF),
+    barkD: compile(VS_TREE(true), FS_DEPTH_BARK), leafD: compile(VS_TREE(true), FS_DEPTH_LEAF),
+    ground: compile(VS_GROUND, FS_GROUND), sky: compile(VS_SKY, FS_SKY), bake: compile(VS_BAKE, FS_BAKE),
+    emptyVao: gl.createVertexArray(), meshes: {}, tex: {}, SH: 2048,
+  };
+  // shadow map
+  R.shadowTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, R.shadowTex);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, R.SH, R.SH);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+  R.shadowFbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, R.shadowFbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, R.shadowTex, 0);
+  gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  // ground disc
+  const gp = [0, 0, 0], gi = [], seg = 96;
+  for (let i = 0; i < seg; i++) { const a = i / seg * TAU; gp.push(Math.cos(a), 0, Math.sin(a)); }
+  for (let i = 0; i < seg; i++) gi.push(0, 1 + (i + 1) % seg, 1 + i);
+  R.groundVao = gl.createVertexArray(); gl.bindVertexArray(R.groundVao);
+  const gb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, gb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(gp), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  R.groundIb = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, R.groundIb); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(gi), gl.STATIC_DRAW);
+  R.groundCount = gi.length;
+  gl.bindVertexArray(null);
+  R.groundBuf = gb;
+  return true;
+}
+
+function uploadTex(levelsOrData, S, { srgb, repeat, mips }) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  const fmt = srgb ? gl.SRGB8_ALPHA8 : gl.RGBA8;
+  if (Array.isArray(levelsOrData)) levelsOrData.forEach((lv, i) => gl.texImage2D(gl.TEXTURE_2D, i, fmt, lv.w, lv.w, 0, gl.RGBA, gl.UNSIGNED_BYTE, lv.d));
+  else { gl.texImage2D(gl.TEXTURE_2D, 0, fmt, S, S, 0, gl.RGBA, gl.UNSIGNED_BYTE, levelsOrData); if (mips !== false) gl.generateMipmap(gl.TEXTURE_2D); }
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const w = repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, w);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, w);
+  if (R.aniso) gl.texParameterf(gl.TEXTURE_2D, R.aniso.TEXTURE_MAX_ANISOTROPY_EXT, R.maxAniso);
+  return t;
+}
+
+function freeMesh(m) {
+  if (!m) return;
+  m.bufs.forEach(b => gl.deleteBuffer(b)); gl.deleteBuffer(m.ib); gl.deleteVertexArray(m.vao);
+  if (m.wire) { gl.deleteBuffer(m.wire.ib); gl.deleteVertexArray(m.wire.vao); }
+}
+function uploadMesh(m) {
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const bufs = [];
+  const attr = (loc, data, size) => {
+    const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0); bufs.push({ b, loc, size });
+  };
+  attr(0, m.pos, 3); attr(1, m.nrm, 3); attr(2, m.tan, 3); attr(3, m.uv, 2); attr(4, m.wind, 4); attr(5, m.col, 3);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.idx, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, ib, bufs: bufs.map(x => x.b), attrs: bufs, count: m.idx.length, src: m, wire: null };
+}
+function ensureWire(m) {
+  if (!m || m.wire || !m.count) return;
+  const idx = m.src.idx, li = new Uint32Array(idx.length * 2);
+  for (let i = 0, o = 0; i < idx.length; i += 3) {
+    li[o++] = idx[i]; li[o++] = idx[i + 1]; li[o++] = idx[i + 1]; li[o++] = idx[i + 2]; li[o++] = idx[i + 2]; li[o++] = idx[i];
+  }
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  for (const a of m.attrs) { gl.bindBuffer(gl.ARRAY_BUFFER, a.b); gl.enableVertexAttribArray(a.loc); gl.vertexAttribPointer(a.loc, a.size, gl.FLOAT, false, 0, 0); }
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, li, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  m.wire = { vao, ib, count: li.length };
+}
+
+// =====================================================================
+//  App state
+// =====================================================================
+let P = presetParams('oak');
+const VIEW = { leaves: true, wire: false, shadows: true, spin: false, windOn: true, bg: 'meadow', sunAz: 35, sunEl: 48 };
+const cam = { yaw: 0.65, pitch: 0.1, dist: 30, target: [0, 6, 0], fov: 36 * PI / 180 };
+let TREE = null, dirty = true, simTime = 0, pendingGeo = false, lastGenEnd = 0, lastGenMs = 30;
+let texKey = { bark: null, leaf: null };
+let barkTexData = null, leafTexCanvas = null;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (reduceMotion) VIEW.windOn = false;
+
+function rebuildBarkTex() {
+  if (!R) return;
+  if (texKey.bark === P.barkType) return;
+  barkTexData = genBark(P.barkType, 512);
+  if (R.tex.alb) gl.deleteTexture(R.tex.alb);
+  if (R.tex.nrm) gl.deleteTexture(R.tex.nrm);
+  R.tex.alb = uploadTex(barkTexData.alb, 512, { srgb: true, repeat: true });
+  R.tex.nrm = uploadTex(barkTexData.nrm, 512, { srgb: false, repeat: true });
+  texKey.bark = P.barkType; dirty = true;
+}
+function rebuildLeafTex() {
+  if (!R) return;
+  const key = P.leafType;
+  if (texKey.leaf === key) return;
+  leafTexCanvas = leafCanvas(P.leafType, 512);
+  const levels = leafMips(canvasRGBA(leafTexCanvas), 512);
+  R.leafLevel0 = levels[0].d;
+  if (R.tex.leaf) gl.deleteTexture(R.tex.leaf);
+  R.tex.leaf = uploadTex(levels, 512, { srgb: true, repeat: false });
+  texKey.leaf = key; dirty = true;
+}
+// ---------- branch cards: bake real 3D twigs into an alpha-clip atlas ----------
+const TILE = 512;
+function rotateAround(v, ax, a) {
+  const c = Math.cos(a), s = Math.sin(a), d = dot(ax, v) * (1 - c), x = cross(ax, v);
+  return [v[0] * c + x[0] * s + ax[0] * d, v[1] * c + x[1] * s + ax[1] * d, v[2] * c + x[2] * s + ax[2] * d];
+}
+function twigParams(tw, v) {
+  const T = clone(P), vr = mulberry32(hash(P.seed, 7000 + v));
+  T._twig = true; T.seed = hash(P.seed, 5000 + v) % 99991;
+  T.height = tw.len * (0.75 + 0.5 * vr()); T.radius = tw.r; T.taper = 0.15; T.flare = 0; T.lean = 0; T.forkAt = 0; T.shape = 'cylindrical';
+  const Lc = P.levels[tw.cut - 1];
+  T.trunkGnarl = Lc.gnarl * 2; T._twigGrav = Lc.gravity * 0.35 * (0.5 + vr());
+  const rest = P.levels.slice(tw.cut).map(l => Object.assign({}, l, {
+    count: l.count * (0.7 + 0.6 * vr()), angle: l.angle * (0.85 + 0.3 * vr()), length: l.length * (0.85 + 0.3 * vr()) }));
+  while (rest.length < 3) rest.push(LV(0, 0.1, 40, 0.4, 0.6, 0, 0.3));
+  T.levels = rest; T.levelCount = Math.max(0, P.levelCount - tw.cut);
+  T.leafDensity = P.leafDensity * (0.85 + 0.3 * vr());
+  T.detail = 1; T.style = 'full';
+  return T;
+}
+function down2(src, S) {
+  const D = S >> 1, o = new Uint8Array(D * D * 4);
+  for (let y = 0; y < D; y++) for (let x = 0; x < D; x++) {
+    let r = 0, g = 0, b = 0, a = 0;
+    for (let k = 0; k < 4; k++) {
+      const i = ((2 * y + (k >> 1)) * S + 2 * x + (k & 1)) * 4, w = src[i + 3];
+      r += src[i] * w; g += src[i + 1] * w; b += src[i + 2] * w; a += w;
+    }
+    const j = (y * D + x) * 4;
+    if (a > 0) { o[j] = r / a; o[j + 1] = g / a; o[j + 2] = b / a; }
+    o[j + 3] = a / 4;
+  }
+  return o;
+}
+function ensureBakeTarget() {
+  if (R.bakeFbo) return;
+  const S = TILE * 2;
+  R.bakeTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, R.bakeTex);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, S, S);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  R.bakeDepth = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, R.bakeDepth);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, S, S);
+  R.bakeFbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, R.bakeFbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, R.bakeTex, 0);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, R.bakeDepth);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+function bakeCards(tw) {
+  ensureBakeTarget();
+  const n = Math.round(Math.sqrt(P.cardVariants)) || 3, A = n * TILE, SS = TILE * 2;
+  const albA = new Uint8Array(A * A * 4), nrmA = new Uint8Array(A * A * 4), tiles = [];
+  const pr = R.bake;
+  for (let v = 0; v < n * n; v++) {
+    const t = generateTree(twigParams(tw, v));
+    const { min, max } = t.bounds;
+    const s = Math.max(max[0] - min[0], max[1] - min[1], 0.05) * 1.05;
+    const wx0 = (min[0] + max[0]) / 2 - s / 2, wy0 = (min[1] + max[1]) / 2 - s / 2;
+    const tile = { s, ax: -wx0 / s, ay: -wy0 / s, chord: [t.tip[0], t.tip[1]], chordLen: Math.hypot(t.tip[0], t.tip[1]) || 0.01, i: v % n, j: Math.floor(v / n), n };
+    tiles.push(tile);
+    const mb = uploadMesh(t.bark), ml = t.leaves.idx.length ? uploadMesh(t.leaves) : null;
+    const vp = M4.mul(M4.ortho(wx0, wx0 + s, wy0, wy0 + s, 0.01, max[2] - min[2] + 2), M4.lookAt([0, 0, max[2] + 1], [0, 0, 0], UP));
+    gl.bindFramebuffer(gl.FRAMEBUFFER, R.bakeFbo);
+    gl.viewport(0, 0, SS, SS);
+    gl.disable(gl.CULL_FACE); gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+    gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE); gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.useProgram(pr.p);
+    setU(pr, { uVP: vp, uTint: lin(P.barkTint) }); setI(pr, { uTex: 0 });
+    gl.activeTexture(gl.TEXTURE0);
+    for (let pass = 0; pass < 2; pass++) {
+      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      setI(pr, { uOut: pass, uLeafMode: 0 });
+      gl.bindTexture(gl.TEXTURE_2D, R.tex.alb);
+      gl.bindVertexArray(mb.vao); gl.drawElements(gl.TRIANGLES, mb.count, gl.UNSIGNED_INT, 0);
+      if (ml) { setI(pr, { uLeafMode: 1 }); gl.bindTexture(gl.TEXTURE_2D, R.tex.leaf); gl.bindVertexArray(ml.vao); gl.drawElements(gl.TRIANGLES, ml.count, gl.UNSIGNED_INT, 0); }
+      const px = new Uint8Array(SS * SS * 4);
+      gl.readPixels(0, 0, SS, SS, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const d = down2(px, SS);
+      if (pass === 0) { tile.alb = d; } else { for (let i = 3; i < d.length; i += 4) d[i] = tile.alb[i]; tile.nrm = d; }
+    }
+    gl.bindVertexArray(null);
+    freeMesh(mb); freeMesh(ml);
+    dilate(tile.alb, TILE); dilate(tile.nrm, TILE);
+    for (let y = 0; y < TILE; y++) {
+      const o = ((tile.j * TILE + y) * A + tile.i * TILE) * 4;
+      albA.set(tile.alb.subarray(y * TILE * 4, (y + 1) * TILE * 4), o);
+      nrmA.set(tile.nrm.subarray(y * TILE * 4, (y + 1) * TILE * 4), o);
+    }
+    delete tile.alb; delete tile.nrm;
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  const albL = buildMips(albA, A), nrmL = buildMips(nrmA, A);
+  if (R.tex.card) gl.deleteTexture(R.tex.card);
+  if (R.tex.cardN) gl.deleteTexture(R.tex.cardN);
+  R.tex.card = uploadTex(albL, A, { srgb: true, repeat: false });
+  R.tex.cardN = uploadTex(nrmL, A, { srgb: false, repeat: false });
+  R.cardAlb0 = albL[0].d; R.cardNrm0 = nrmL[0].d; R.cardA = A; R.cardTiles = tiles;
+}
+function buildCards(T) {
+  const tiles = R.cardTiles, H = P.height, planes = Math.max(1, Math.round(P.cardPlanes));
+  const bendW = y => H * 0.01 * Math.pow(clamp(y / H, 0, 1.5), 2);
+  const lp = [], ln = [], lt = [], lu = [], lw = [], lc = [], li = [];
+  const r = mulberry32(hash(P.seed, 31337)), A = R.cardA, ht = 0.5 / A;
+  for (const c of T.cardSpecs) {
+    // pick the variant whose length best matches this branch, with some randomness
+    let best = tiles[0], bs = Infinity;
+    for (const t of tiles) { const sc = Math.abs(Math.log(c.chordLen / t.chordLen)) + r() * 0.35; if (sc < bs) { bs = sc; best = t; } }
+    const t = best, k = c.chordLen / t.chordLen * P.cardScale, alpha = Math.atan2(t.chord[0], t.chord[1]);
+    let N0 = sub(UP, scale(c.D, dot(UP, c.D)));
+    N0 = vlen(N0) < 1e-3 ? perp(c.D) : norm(N0);
+    N0 = rotateAround(N0, c.D, (r() - 0.5) * 0.9);
+    const phase = r();
+    const u0 = t.i / t.n + ht, u1 = (t.i + 1) / t.n - ht, v0 = t.j / t.n + ht, v1 = (t.j + 1) / t.n - ht;
+    for (let pl = 0; pl < planes; pl++) {
+      const Nn = rotateAround(N0, c.D, pl * PI / planes), E = cross(c.D, Nn);
+      const Rv = add(scale(c.D, Math.sin(alpha)), scale(E, Math.cos(alpha)));
+      const Uv = add(scale(c.D, Math.cos(alpha)), scale(E, -Math.sin(alpha)));
+      const base = lp.length / 3;
+      for (let q = 0; q < 4; q++) {
+        const fu = q & 1, fv = q >> 1;
+        const x = (fu - t.ax) * t.s * k, y = (fv - t.ay) * t.s * k;
+        const p = add(c.base, add(scale(Rv, x), scale(Uv, y)));
+        lp.push(p[0], p[1], p[2]); ln.push(Nn[0], Nn[1], Nn[2]); lt.push(Rv[0], Rv[1], Rv[2]);
+        lu.push(fu ? u1 : u0, fv ? v1 : v0);
+        const along = clamp(dot(sub(p, c.base), c.D) / c.chordLen, 0, 1.2);
+        lw.push(bendW(p[1]), lerp(c.flex0, c.flex1, Math.min(1, along)), along * 0.03 * c.chordLen, phase);
+        lc.push(c.ao, c.ao, c.ao);
+      }
+      li.push(base, base + 1, base + 3, base, base + 3, base + 2);
+    }
+  }
+  return { pos: new Float32Array(lp), nrm: new Float32Array(ln), tan: new Float32Array(lt), uv: new Float32Array(lu),
+    wind: new Float32Array(lw), col: new Float32Array(lc), idx: new Uint32Array(li), card: true };
+}
+function cardKey(tw) {
+  return JSON.stringify([tw, P.levels.slice(tw.cut - 1), P.levelCount, P.seed, P.cardVariants, P.leafType, P.leafDensity, P.leafSize, P.leafSizeVar,
+    P.leafAngle, P.leafDroop, P.leafRandom, P.leafStart, P.season, P.leafColor, P.autumnColor, P.colorVar, P.barkType, P.barkTint, P.barkScale]);
+}
+function drawAtlasPreview() {
+  const cv = document.getElementById('atlas');
+  if (!cv || !R || !R.cardAlb0) return;
+  const A = R.cardA, src = R.cardAlb0, tmp = mkCanvas(A, A), tg = tmp.getContext('2d'), img = tg.createImageData(A, A);
+  for (let y = 0; y < A; y++) { const sy = A - 1 - y; img.data.set(src.subarray(sy * A * 4, (sy + 1) * A * 4), y * A * 4); }
+  tg.putImageData(img, 0, 0);
+  const g = cv.getContext('2d'), W = cv.width, n = Math.round(A / TILE);
+  g.fillStyle = '#0f130f'; g.fillRect(0, 0, W, W);
+  g.fillStyle = '#151b16';
+  const c = W / 24; for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if ((x + y) & 1) g.fillRect(x * c, y * c, c, c);
+  g.drawImage(tmp, 0, 0, W, W);
+  g.strokeStyle = 'rgba(226,162,58,0.35)'; g.lineWidth = 1;
+  for (let i = 1; i < n; i++) { const q = Math.round(i * W / n) + 0.5; g.beginPath(); g.moveTo(q, 0); g.lineTo(q, W); g.moveTo(0, q); g.lineTo(W, q); g.stroke(); }
+}
+
+function rebuildGeo(bake = true) {
+  const t0 = performance.now();
+  TREE = generateTree(P);
+  if (TREE.cardSpecs && R) {
+    const key = cardKey(TREE.twig), n = Math.round(Math.sqrt(P.cardVariants));
+    const canReuse = R.cardTiles && R.cardTiles.length === n * n;
+    if (key !== R.cardKey && (bake || !canReuse)) { bakeCards(TREE.twig); R.cardKey = key; drawAtlasPreview(); }
+    const m = buildCards(TREE);
+    TREE.leaves = m;
+    const { min, max } = TREE.bounds;
+    for (let i = 0; i < m.pos.length; i += 3) for (let k = 0; k < 3; k++) { min[k] = Math.min(min[k], m.pos[i + k]); max[k] = Math.max(max[k], m.pos[i + k]); }
+    min[1] = Math.max(min[1], 0);
+    Object.assign(TREE.stats, { height: max[1], leaves: TREE.cardSpecs.length, tris: (TREE.bark.idx.length + m.idx.length) / 3, verts: (TREE.bark.pos.length + m.pos.length) / 3 });
+  }
+  if (R) {
+    freeMesh(R.meshes.bark); freeMesh(R.meshes.leaves);
+    R.meshes.bark = uploadMesh(TREE.bark);
+    R.meshes.leaves = TREE.leaves.idx.length ? uploadMesh(TREE.leaves) : null;
+    if (VIEW.wire) { ensureWire(R.meshes.bark); ensureWire(R.meshes.leaves); }
+  }
+  lastGenMs = performance.now() - t0; lastGenEnd = performance.now();
+  updateTag();
+  dirty = true;
+}
+function frameTree() {
+  if (!TREE) return;
+  const { min, max } = TREE.bounds;
+  const c = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+  const rad = 0.5 * Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  const stage = canvas.getBoundingClientRect();
+  const asp = Math.max(0.4, stage.width / Math.max(1, stage.height));
+  const fit = rad / Math.sin(cam.fov / 2) * (asp < 1 ? 1 / asp * 0.85 : 0.82);
+  cam.target = [c[0], c[1] * 0.95, c[2]];
+  cam.dist = Math.max(1, fit);
+  dirty = true;
+}
+
+// =====================================================================
+//  Rendering
+// =====================================================================
+const SCENES = {
+  meadow: { zenith: lin('#9db3c2'), horizon: lin('#e3e5da'), grassA: lin('#3a4428'), grassB: lin('#54603a'), sky: [0.33, 0.4, 0.48], gnd: [0.1, 0.095, 0.065], sun: [2.85, 2.66, 2.33], disk: 1 },
+  studio: { zenith: lin('#cfd0cb'), horizon: lin('#e9e9e4'), grassA: lin('#bdbdb6'), grassB: lin('#c8c8c1'), sky: [0.42, 0.42, 0.43], gnd: [0.12, 0.12, 0.115], sun: [2.6, 2.55, 2.45], disk: 0 },
+};
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = canvas.getBoundingClientRect();
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; dirty = true; }
+}
+function draw() {
+  if (!R || !TREE) return;
+  resize();
+  const W = canvas.width, Hh = canvas.height, S = SCENES[VIEW.bg] || SCENES.meadow;
+  const cp = Math.cos(cam.pitch);
+  const eye = [cam.target[0] + cam.dist * cp * Math.sin(cam.yaw), cam.target[1] + cam.dist * Math.sin(cam.pitch), cam.target[2] + cam.dist * cp * Math.cos(cam.yaw)];
+  const groundR = Math.max(90, P.height * 10);
+  const near = Math.max(0.02, cam.dist * 0.01), far = cam.dist + groundR * 1.3;
+  const view = M4.lookAt(eye, cam.target, UP), proj = M4.persp(cam.fov, W / Hh, near, far);
+  const vp = M4.mul(proj, view), invVP = M4.inv(vp);
+  const az = VIEW.sunAz * PI / 180, el = VIEW.sunEl * PI / 180;
+  const L = [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+  // light frustum around the tree
+  const { min, max } = TREE.bounds;
+  const c = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+  const rad = 0.5 * Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) * 1.08 + 0.5;
+  const lEye = add(c, scale(L, rad * 2.5));
+  const lView = M4.lookAt(lEye, c, Math.abs(L[1]) > 0.99 ? [0, 0, 1] : UP);
+  const lProj = M4.ortho(-rad, rad, -rad, rad, 0.1, rad * 6.5);
+  const lightVP = M4.mul(lProj, lView);
+  const wd = P.windDir * PI / 180;
+  const common = {
+    uVP: vp, uLightVP: lightVP, uTime: simTime, uWind: P.wind, uWindFreq: P.windFreq, uWindDir: [Math.cos(wd), Math.sin(wd)],
+    uNOff: rad * 2 / R.SH * 1.5, uSunDir: L, uSunCol: S.sun, uSky: S.sky, uGnd: S.gnd, uCam: eye, uHorizon: S.horizon,
+    uShadowOn: VIEW.shadows ? 1 : 0, uTexel: 1 / R.SH, uFogNear: cam.dist + P.height * 1.5, uFogFar: groundR * 0.95, uExposure: 1, uBias: 0.0006,
+  };
+  const bark = R.meshes.bark, leaves = VIEW.leaves ? R.meshes.leaves : null;
+  const cut = 0.5, cards = !!TREE.cardSpecs && !!R.tex.card;
+  const leafTex = cards ? R.tex.card : R.tex.leaf;
+  // ---- shadow pass ----
+  if (VIEW.shadows) {
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, R.shadowFbo);
+    gl.viewport(0, 0, R.SH, R.SH);
+    gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.CULL_FACE);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(R.barkD.p); setU(R.barkD, common);
+    gl.bindVertexArray(bark.vao); gl.drawElements(gl.TRIANGLES, bark.count, gl.UNSIGNED_INT, 0);
+    if (leaves) {
+      gl.useProgram(R.leafD.p); setU(R.leafD, Object.assign({ uCut: cut }, common));
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, leafTex); setI(R.leafD, { uLeaf: 3 });
+      gl.bindVertexArray(leaves.vao); gl.drawElements(gl.TRIANGLES, leaves.count, gl.UNSIGNED_INT, 0);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+  // ---- main pass ----
+  gl.viewport(0, 0, W, Hh);
+  gl.clearColor(0.8, 0.8, 0.78, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, R.shadowTex);
+  // sky
+  gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+  gl.useProgram(R.sky.p);
+  setU(R.sky, { uInvVP: invVP, uZenith: S.zenith, uHorizon: S.horizon, uSunDir: L, uSunCol: S.sun, uCam: eye, uExposure: 1, uSunDisk: S.disk });
+  gl.bindVertexArray(R.emptyVao); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+  // ground
+  gl.useProgram(R.ground.p);
+  setU(R.ground, Object.assign({}, common, { uGR: groundR, uNOff: rad * 2 / R.SH * 2,
+    uGrassA: S.grassA, uGrassB: S.grassB, uCrown: [TREE.crown.c[0], TREE.crown.c[2], Math.max(TREE.crown.r[0], TREE.crown.r[2]), VIEW.leaves ? TREE.crown.ao : 0], uTrunkR: P.radius }));
+  setI(R.ground, { uShadow: 2 });
+  gl.bindVertexArray(R.groundVao); gl.drawElements(gl.TRIANGLES, R.groundCount, gl.UNSIGNED_SHORT, 0);
+  // bark
+  const wireCol = [0.07, 0.08, 0.06];
+  if (VIEW.wire) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1, 1); }
+  gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+  gl.useProgram(R.bark.p);
+  const tint = lin(P.barkTint);
+  setU(R.bark, Object.assign({ uTint: tint, uRelief: P.barkRelief, uMoss: P.moss, uGloss: (BARK_TYPES[P.barkType] || BARK_TYPES.oak).gloss, uTreeH: P.height, uWire: 0, uWireCol: wireCol }, common));
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.tex.alb);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, R.tex.nrm);
+  setI(R.bark, { uAlb: 0, uNmap: 1, uShadow: 2 });
+  gl.bindVertexArray(bark.vao); gl.drawElements(gl.TRIANGLES, bark.count, gl.UNSIGNED_INT, 0);
+  gl.disable(gl.CULL_FACE);
+  // leaves
+  if (leaves) {
+    gl.useProgram(R.leaf.p);
+    const a2c = R.samples > 0;
+    setU(R.leaf, Object.assign({ uCut: cut, uA2C: a2c ? 1 : 0, uTrans: cards ? 0.6 : 0.9, uWire: 0, uWireCol: wireCol, uCard: cards ? 1 : 0, uCrownC: TREE.crown.c, uCrownR: TREE.crown.r }, common));
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, leafTex);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, cards ? R.tex.cardN : R.tex.leaf);
+    setI(R.leaf, { uLeaf: 3, uLeafN: 4, uShadow: 2 });
+    if (a2c) gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+    gl.bindVertexArray(leaves.vao); gl.drawElements(gl.TRIANGLES, leaves.count, gl.UNSIGNED_INT, 0);
+    if (a2c) gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+  }
+  if (VIEW.wire) {
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    ensureWire(bark); gl.useProgram(R.bark.p); setU(R.bark, { uWire: 1 });
+    gl.bindVertexArray(bark.wire.vao); gl.drawElements(gl.LINES, bark.wire.count, gl.UNSIGNED_INT, 0);
+    setU(R.bark, { uWire: 0 });
+    if (leaves) {
+      ensureWire(leaves); gl.useProgram(R.leaf.p); setU(R.leaf, { uWire: 1, uWireCol: [0.12, 0.2, 0.07] });
+      gl.bindVertexArray(leaves.wire.vao); gl.drawElements(gl.LINES, leaves.wire.count, gl.UNSIGNED_INT, 0);
+      setU(R.leaf, { uWire: 0 });
+    }
+  }
+  gl.bindVertexArray(null);
+}
+
+// =====================================================================
+//  Camera input
+// =====================================================================
+const pointers = new Map();
+let dragMode = null, lastPinch = 0;
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  dragMode = (e.button === 2 || e.button === 1 || e.shiftKey) ? 'pan' : 'orbit';
+  canvas.classList.add('drag');
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; lastPinch = Math.hypot(a.x - b.x, a.y - b.y); }
+});
+canvas.addEventListener('pointermove', e => {
+  const p = pointers.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (lastPinch > 0) cam.dist = clamp(cam.dist * lastPinch / Math.max(1, d), 0.5, 400);
+    lastPinch = d;
+    pan(dx * 0.5, dy * 0.5);
+  } else if (dragMode === 'pan') pan(dx, dy);
+  else { cam.yaw -= dx * 0.006; cam.pitch = clamp(cam.pitch + dy * 0.005, -0.15, 1.45); }
+  dirty = true;
+});
+const endPtr = e => { pointers.delete(e.pointerId); if (!pointers.size) { dragMode = null; canvas.classList.remove('drag'); } lastPinch = 0; };
+canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
+canvas.addEventListener('wheel', e => { e.preventDefault(); cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), 0.5, 400); dirty = true; }, { passive: false });
+canvas.addEventListener('dblclick', () => frameTree());
+function pan(dx, dy) {
+  const h = canvas.getBoundingClientRect().height || 1;
+  const k = cam.dist * 2 * Math.tan(cam.fov / 2) / h;
+  const right = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
+  const fwd = [-Math.sin(cam.yaw) * Math.cos(cam.pitch), -Math.sin(cam.pitch), -Math.cos(cam.yaw) * Math.cos(cam.pitch)];
+  const up = cross(right, fwd);
+  cam.target = add(cam.target, add(scale(right, -dx * k), scale(up, dy * k)));
+  cam.target[1] = Math.max(cam.target[1], -1);
+}
+
+// =====================================================================
+//  Main loop
+// =====================================================================
+let lastT = 0;
+function loop(ts) {
+  requestAnimationFrame(loop);
+  const now = ts / 1000, dt = Math.min(0.05, Math.max(0, now - lastT)); lastT = now;
+  if (VIEW.windOn && P.wind > 0) { simTime += dt; dirty = true; }
+  if (VIEW.spin) { cam.yaw += dt * 0.22; dirty = true; }
+  if (pendingGeo && performance.now() - lastGenEnd > Math.min(220, lastGenMs * 1.2)) { pendingGeo = false; rebuildGeo(false); }
+  if (!dirty) return;
+  dirty = false;
+  draw();
+}
+
+// =====================================================================
+//  Herbarium label
+// =====================================================================
+const fmtInt = n => Math.round(n).toLocaleString('en-US');
+function seasonName(s) { return s < 0.22 ? 'Spring' : s < 0.5 ? 'Summer' : s < 0.8 ? 'Autumn' : s < 0.97 ? 'Late autumn' : 'Winter'; }
+function updateTag() {
+  if (!TREE) return;
+  const pr = PRESETS[P.preset] || PRESETS.oak, st = TREE.stats;
+  document.getElementById('t-no').textContent = 'No. ' + String(P.seed).padStart(4, '0');
+  const latin = document.getElementById('t-latin');
+  latin.textContent = pr.latin + ' ';
+  if (pr.auth) { const sm = document.createElement('small'); sm.textContent = pr.auth; latin.append(sm); }
+  const LT = LEAF_TYPES[P.leafType];
+  const seasonTxt = P.leafDensity <= 0 ? 'leafless' : LT.evergreen ? (LT.colored ? 'in flower' : 'evergreen') : seasonName(P.season).toLowerCase();
+  document.getElementById('t-common').textContent = pr.name + ' · ' + seasonTxt + (P._mod ? ' · modified' : '');
+  document.getElementById('t-h').textContent = st.height.toFixed(1) + ' m';
+  document.getElementById('t-dbh').textContent = st.dbh ? Math.round(st.dbh * 100) + ' cm' : '—';
+  document.getElementById('t-crown').textContent = st.crown.toFixed(1) + ' m';
+  document.getElementById('t-leaves-l').textContent = TREE.cardSpecs ? 'Cards' : 'Leaves';
+  document.getElementById('t-leaves').textContent = fmtInt(VIEW.leaves ? st.leaves : 0);
+  document.getElementById('t-br').textContent = fmtInt(st.branches);
+  document.getElementById('t-tris').textContent = fmtInt(st.tris - (VIEW.leaves ? 0 : TREE.leaves.idx.length / 3));
+  document.getElementById('t-stamp').textContent = TREE.cardSpecs ? 'Cards · L' + TREE.twig.cut : 'Full · ' + P.detail.toFixed(2);
+  const d = new Date(), rom = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+  document.getElementById('t-date').textContent = 'Grown ' + d.getDate() + '.' + rom[d.getMonth()] + '.' + d.getFullYear();
+}
+
+// =====================================================================
+//  UI
+// =====================================================================
+const $ = id => document.getElementById(id);
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+}
+const syncers = [];
+function syncAll() { syncers.forEach(f => f()); }
+let toastT = 0;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2600); }
+let saveT = 0;
+function saveLocal() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem('lowtree:v1', JSON.stringify(P)); } catch (e) { } }, 400); }
+
+let bakeT = 0;
+function onParam(kind, final = true) {
+  if (kind === 'view') { dirty = true; return; }
+  P._mod = true;
+  if (kind === 'geo') {
+    // while a slider is being dragged, branch cards reuse the current atlas; it is re-baked on release
+    if (final && P.style === 'cards') {
+      pendingGeo = false; busy(true, 'Baking branch atlas…'); clearTimeout(bakeT);
+      bakeT = setTimeout(() => { rebuildGeo(true); busy(false); }, 30);
+    } else pendingGeo = true;
+  }
+  else if (kind === 'leaftex') { busy(true); setTimeout(() => { rebuildLeafTex(); rebuildGeo(); busy(false); }, 20); }
+  else if (kind === 'bark') { busy(true); setTimeout(() => { rebuildBarkTex(); if (P.style === 'cards') rebuildGeo(true); busy(false); dirty = true; }, 20); }
+  else dirty = true;
+  if (kind !== 'geo') updateTag();
+  saveLocal();
+}
+function busy(on, text) { const b = $('busy'); if (on) b.textContent = text || 'Growing…'; b.classList.toggle('on', on); }
+
+const F = {
+  m: v => (v < 1 ? v.toFixed(2) : v.toFixed(1)) + ' m',
+  cm: v => Math.round(v * 100) + ' cm',
+  deg: v => Math.round(v) + '°',
+  pct: v => Math.round(v * 100) + '%',
+  r2: v => v.toFixed(2),
+  int: v => String(Math.round(v)),
+  dens: v => Math.round(v) + '/m',
+};
+function rangeRow(id, label, min, max, step, get, set, fmt, kind) {
+  const inp = el('input', { type: 'range', id: 'c-' + id, min, max, step });
+  const out = el('output', { for: 'c-' + id });
+  const paint = v => { out.textContent = fmt(v); inp.style.setProperty('--fill', ((v - min) / (max - min) * 100).toFixed(1) + '%'); };
+  inp.addEventListener('input', () => { const v = parseFloat(inp.value); set(v); paint(v); onParam(kind, false); });
+  inp.addEventListener('change', () => { if (kind === 'geo' && P.style === 'cards') onParam('geo', true); if (id === 'height') setTimeout(frameTree, 60); });
+  syncers.push(() => { const v = get(); inp.value = v; paint(v); });
+  return el('div', { class: 'row' }, el('label', { for: 'c-' + id }, label), inp, out);
+}
+const pr = (k, label, min, max, step, fmt, kind = 'geo') => rangeRow(k, label, min, max, step, () => P[k], v => { P[k] = v; }, fmt, kind);
+function selectRow(k, label, options, kind = 'geo') {
+  const s = el('select', { id: 'c-' + k }, options.map(([v, t]) => el('option', { value: v }, t)));
+  s.addEventListener('change', () => { P[k] = s.value; onParam(kind, true); });
+  syncers.push(() => { s.value = P[k]; });
+  return el('div', { class: 'row' }, el('label', { for: 'c-' + k }, label), s);
+}
+function segRow(label, options, get, set) {
+  const btns = options.map(([v, t]) => el('button', { type: 'button', 'aria-pressed': 'false', onclick: () => { set(v); paint(); } }, t));
+  const paint = () => { const cur = get(); btns.forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === cur))); };
+  syncers.push(paint);
+  return el('div', { class: 'segrow' }, el('span', {}, label), el('div', { class: 'seg', role: 'group', 'aria-label': label }, btns));
+}
+function section(id, title, hint, open, ...kids) {
+  return el('details', { class: 'sec', id: 'sec-' + id, open }, el('summary', {}, el('h2', {}, title), el('span', { class: 'hint' }, hint)), el('div', { class: 'body' }, kids));
+}
+
+let curLevel = 0;
+function buildUI() {
+  const root = $('sections');
+  // species
+  const spBtns = PRESET_ORDER.map(k => el('button', { type: 'button', class: 'sp', 'aria-pressed': 'false', onclick: () => loadPreset(k) },
+    el('i', {}, PRESETS[k].latin), el('span', {}, PRESETS[k].name)));
+  syncers.push(() => spBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(PRESET_ORDER[i] === P.preset))));
+  root.append(section('species', 'Species', 'start from a preset', true, el('div', { class: 'species' }, spBtns)));
+
+  // foliage mode switch in the sticky header
+  const styleBtns = [['full', 'Full leaves'], ['cards', 'Branch cards (low-poly)']].map(([v, t]) =>
+    el('button', { type: 'button', 'aria-pressed': 'false', onclick: () => setStyle(v) }, t));
+  document.querySelector('.phead').append(el('div', { class: 'seg style', role: 'group', 'aria-label': 'Foliage mode' }, styleBtns));
+  syncers.push(() => styleBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(['full', 'cards'][i] === P.style))));
+
+  // low-poly & LOD
+  const cutRow = segRow('Cards replace', [[1, 'Level 1'], [2, 'Level 2'], [3, 'Level 3']], effCut, v => { P.cardLevel = v; onParam('geo'); syncAll(); });
+  const cutBtns = cutRow.querySelectorAll('button');
+  syncers.push(() => cutBtns.forEach((b, i) => { b.classList.toggle('dim', i >= P.levelCount); b.disabled = i >= P.levelCount; }));
+  const cardRows = el('div', { class: 'sub' },
+    cutRow,
+    segRow('Planes', [[1, '1'], [2, '2 crossed'], [3, '3']], () => P.cardPlanes, v => { P.cardPlanes = v; onParam('geo'); }),
+    segRow('Variants', [[4, '4'], [9, '9'], [16, '16']], () => P.cardVariants, v => { P.cardVariants = v; onParam('geo'); }),
+    pr('cardScale', 'Card size', 0.6, 1.8, 0.01, F.r2),
+    el('canvas', { id: 'atlas', class: 'atlas', width: 624, height: 624, role: 'img', 'aria-label': 'Baked branch atlas' }),
+    el('p', { class: 'cap', id: 'atlas-cap' }, 'Baked atlas'));
+  syncers.push(() => {
+    cardRows.hidden = P.style !== 'cards';
+    const n = Math.round(Math.sqrt(P.cardVariants));
+    $('atlas-cap').textContent = `Baked atlas · ${n * n} branch variants · ${n * TILE} px · albedo + alpha + normal`;
+  });
+  root.append(section('poly', 'Low-poly & LOD', 'branches baked into an atlas', true,
+    segRow('LOD', [[0, 'LOD0'], [1, 'LOD1'], [2, 'LOD2'], [3, 'LOD3']], currentLOD, applyLOD),
+    el('p', { class: 'note' }, 'LOD0 draws every leaf. LOD1 to LOD3 render real 3D branches of this tree into an alpha-clip atlas and swap progressively larger branches for crossed cards. The skeleton stays the same at every LOD.'),
+    cardRows,
+    pr('detail', 'Bark detail', 0.2, 2, 0.01, F.r2)));
+
+  // trunk
+  root.append(section('trunk', 'Trunk', 'stem, roots and forks', true,
+    pr('height', 'Height', 1, 35, 0.1, F.m),
+    pr('radius', 'Base radius', 0.03, 1.2, 0.01, F.cm),
+    pr('taper', 'Top radius', 0.01, 0.6, 0.01, F.pct),
+    pr('flare', 'Root flare', 0, 1, 0.01, F.r2),
+    pr('trunkGnarl', 'Gnarl', 0, 1, 0.01, F.r2),
+    pr('lean', 'Lean', 0, 30, 0.5, F.deg),
+    selectRow('shape', 'Crown shape', SHAPES),
+    pr('forkAt', 'Fork height', 0, 0.9, 0.01, v => v < 0.05 ? 'Off' : F.pct(v)),
+    pr('forks', 'Fork count', 2, 4, 1, F.int),
+    pr('forkAngle', 'Fork angle', 5, 70, 1, F.deg)));
+
+  // branches
+  const tabs = [0, 1, 2].map(i => el('button', { type: 'button', 'aria-pressed': 'false', onclick: () => { curLevel = i; syncAll(); } }, 'Level ' + (i + 1)));
+  syncers.push(() => tabs.forEach((b, i) => { b.setAttribute('aria-pressed', String(i === curLevel)); b.classList.toggle('dim', i >= P.levelCount); }));
+  const lvNote = el('p', { class: 'note' });
+  syncers.push(() => {
+    lvNote.textContent = curLevel >= P.levelCount ? `Level ${curLevel + 1} is off. Raise Depth to ${curLevel + 1} to grow it.`
+      : curLevel === 0 ? 'Limbs along the trunk. Start sets where the crown begins.' : `Branches growing off level ${curLevel} limbs.`;
+  });
+  const lr = (k, label, min, max, step, fmt) => rangeRow('l-' + k, label, min, max, step, () => P.levels[curLevel][k], v => { P.levels[curLevel][k] = v; }, fmt, 'geo');
+  root.append(section('branches', 'Branches', 'three recursive levels', true,
+    segRow('Depth', [[1, '1'], [2, '2'], [3, '3']], () => P.levelCount, v => { P.levelCount = v; onParam('geo'); syncAll(); }),
+    el('div', { class: 'seg lvtabs', role: 'group', 'aria-label': 'Edit level' }, tabs),
+    lvNote,
+    lr('count', 'Count', 0, 90, 1, F.int),
+    lr('start', 'Start', 0, 0.95, 0.01, F.pct),
+    lr('angle', 'Angle', 0, 110, 1, F.deg),
+    lr('length', 'Length', 0.05, 1.2, 0.01, F.r2),
+    lr('radius', 'Thickness', 0.1, 0.9, 0.01, F.r2),
+    lr('gravity', 'Gravity', -1, 2, 0.01, F.r2),
+    lr('gnarl', 'Gnarl', 0, 1.2, 0.01, F.r2),
+    lr('whorl', 'Per node', 1, 8, 1, F.int),
+    lr('flatten', 'Flatten', 0, 1, 0.01, F.r2)));
+
+  // leaves
+  const leafSw = Object.keys(LEAF_TYPES).map(k => {
+    const cv = mkCanvas(84, 60);
+    const b = el('button', { type: 'button', class: 'sw', 'aria-pressed': 'false', onclick: () => setLeafType(k) }, cv, LEAF_TYPES[k].label);
+    drawLeafThumb(cv, k);
+    return b;
+  });
+  syncers.push(() => leafSw.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(LEAF_TYPES)[i] === P.leafType))));
+  const sumC = el('input', { type: 'color', id: 'c-leafColor', 'aria-label': 'Summer colour' });
+  const autC = el('input', { type: 'color', id: 'c-autumnColor', 'aria-label': 'Autumn colour' });
+  sumC.addEventListener('input', () => { P.leafColor = sumC.value; onParam('geo', false); });
+  autC.addEventListener('input', () => { P.autumnColor = autC.value; onParam('geo', false); });
+  sumC.addEventListener('change', () => { if (P.style === 'cards') onParam('geo', true); });
+  autC.addEventListener('change', () => { if (P.style === 'cards') onParam('geo', true); });
+  syncers.push(() => { sumC.value = P.leafColor; autC.value = P.autumnColor; });
+  const seasonNote = el('p', { class: 'note' });
+  syncers.push(() => { const LT = LEAF_TYPES[P.leafType]; seasonNote.textContent = LT.evergreen ? (LT.colored ? 'Blossom keeps its colour; season has no effect.' : 'Evergreen: season has no effect.') : ''; seasonNote.hidden = !LT.evergreen; });
+  root.append(section('leaves', 'Leaves', 'foliage cards and season', true,
+    el('div', { class: 'swatches' }, leafSw),
+    pr('leafDensity', 'Density', 0, 70, 1, F.dens),
+    pr('leafSize', 'Size', 0.02, 0.8, 0.005, F.cm),
+    pr('leafSizeVar', 'Size variance', 0, 0.8, 0.01, F.r2),
+    pr('leafAngle', 'Angle', 0, 90, 1, F.deg),
+    pr('leafDroop', 'Droop', 0, 1, 0.01, F.r2),
+    pr('leafRandom', 'Randomness', 0, 1, 0.01, F.r2),
+    pr('leafStart', 'Start', 0, 0.95, 0.01, F.pct),
+    pr('season', 'Season', 0, 1, 0.005, seasonName),
+    el('div', { class: 'ticks', 'aria-hidden': 'true' }, el('span'), el('div', {}, el('span', {}, 'Spr'), el('span', {}, 'Sum'), el('span', {}, 'Aut'), el('span', {}, 'Win')), el('span')),
+    seasonNote,
+    el('div', { class: 'colors' }, el('span', {}, 'Colour'),
+      el('label', { class: 'cpick', for: 'c-leafColor' }, sumC, 'Summer'), el('label', { class: 'cpick', for: 'c-autumnColor' }, autC, 'Autumn')),
+    pr('colorVar', 'Variation', 0, 1, 0.01, F.r2)));
+
+  // bark
+  const barkSw = Object.keys(BARK_TYPES).map(k => {
+    const cv = mkCanvas(84, 60);
+    const b = el('button', { type: 'button', class: 'sw', 'aria-pressed': 'false', onclick: () => { P.barkType = k; syncAll(); onParam('bark'); } }, cv, BARK_TYPES[k].label);
+    drawBarkThumb(cv, k);
+    return b;
+  });
+  syncers.push(() => barkSw.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(BARK_TYPES)[i] === P.barkType))));
+  const tintC = el('input', { type: 'color', id: 'c-barkTint', 'aria-label': 'Bark tint' });
+  tintC.addEventListener('input', () => { P.barkTint = tintC.value; onParam(P.style === 'cards' ? 'geo' : 'uniform', false); });
+  tintC.addEventListener('change', () => { if (P.style === 'cards') onParam('geo', true); });
+  syncers.push(() => { tintC.value = P.barkTint; });
+  root.append(section('bark', 'Bark', 'tileable albedo + normal maps', true,
+    el('div', { class: 'swatches' }, barkSw),
+    el('div', { class: 'colors' }, el('span', {}, 'Tint'), el('label', { class: 'cpick', for: 'c-barkTint' }, tintC, 'Multiply')),
+    pr('barkScale', 'Tile size', 0.1, 2, 0.01, F.m),
+    pr('barkRelief', 'Relief', 0, 2.5, 0.01, F.r2, 'uniform'),
+    pr('moss', 'Moss', 0, 1, 0.01, F.r2, 'uniform')));
+
+  // wind
+  root.append(section('wind', 'Wind', 'sway, gusts, flutter', false,
+    pr('wind', 'Strength', 0, 1.5, 0.01, F.r2, 'uniform'),
+    pr('windFreq', 'Gust speed', 0.2, 3, 0.01, F.r2, 'uniform'),
+    pr('windDir', 'Direction', 0, 360, 1, F.deg, 'uniform')));
+
+  // view
+  const vr = (k, label, min, max, step, fmt) => rangeRow('v-' + k, label, min, max, step, () => VIEW[k], v => { VIEW[k] = v; }, fmt, 'view');
+  const shadowsBtn = segRow('Shadows', [[true, 'On'], [false, 'Off']], () => VIEW.shadows, v => { VIEW.shadows = v; dirty = true; });
+  root.append(section('view', 'View', 'sun and backdrop', false,
+    vr('sunAz', 'Sun azimuth', 0, 360, 1, F.deg),
+    vr('sunEl', 'Sun height', 8, 85, 1, F.deg),
+    segRow('Backdrop', [['meadow', 'Meadow'], ['studio', 'Studio']], () => VIEW.bg, v => { VIEW.bg = v; dirty = true; }),
+    shadowsBtn));
+
+  // export
+  const bZip = el('button', { type: 'button', class: 'btn primary wide', id: 'x-zip', disabled: true }, 'Download model (.zip)');
+  const bPng = el('button', { type: 'button', class: 'btn', id: 'x-png', disabled: true }, 'Screenshot .png');
+  const bJson = el('button', { type: 'button', class: 'btn', id: 'x-json', disabled: true }, 'Save settings');
+  const bLoad = el('button', { type: 'button', class: 'btn', id: 'x-load' }, 'Load settings…');
+  const bCopy = el('button', { type: 'button', class: 'btn', id: 'x-copy' }, 'Copy settings');
+  const fileIn = el('input', { type: 'file', accept: '.json,application/json', class: 'fileinp', id: 'x-file', 'aria-label': 'Settings file' });
+  const xNote = el('p', { class: 'note', id: 'x-note' }, 'Checking whether this view allows downloads…');
+  root.append(section('export', 'Export', 'GLB, OBJ and textures', true,
+    el('div', { class: 'xgrid' }, bZip, bPng, bJson, bLoad, bCopy, fileIn),
+    el('p', { class: 'note' }, 'The .zip holds lowtree.glb (bark and foliage as two materials with embedded textures), lowtree.obj + .mtl, bark albedo and normal maps, the leaf texture or the baked branch atlas, and your settings. Units are metres, Y up.'),
+    xNote));
+  bZip.addEventListener('click', exportZip);
+  bPng.addEventListener('click', exportPng);
+  bJson.addEventListener('click', exportJson);
+  bCopy.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(JSON.stringify(cleanParams(), null, 2)); toast('Settings copied to the clipboard'); }
+    catch (e) { toast('The clipboard is blocked here. Use Save settings instead.'); }
+  });
+  bLoad.addEventListener('click', () => fileIn.click());
+  fileIn.addEventListener('change', async () => {
+    const f = fileIn.files && fileIn.files[0]; if (!f) return;
+    try { applyParams(JSON.parse(await f.text())); toast('Settings loaded'); }
+    catch (e) { toast('That file is not a Lowtree settings file.'); }
+    fileIn.value = '';
+  });
+
+  // header
+  const seed = $('seed');
+  seed.addEventListener('change', () => { P.seed = clamp(Math.round(+seed.value || 0), 0, 99999); seed.value = P.seed; onParam('geo'); updateTagSoon(); });
+  syncers.push(() => { seed.value = P.seed; });
+  $('reroll').addEventListener('click', reroll);
+  $('reset').addEventListener('click', () => loadPreset(P.preset || 'oak'));
+  // toolbar
+  const tb = (id, get, set) => { const b = $(id); b.addEventListener('click', () => { set(!get()); b.setAttribute('aria-pressed', String(get())); dirty = true; }); syncers.push(() => b.setAttribute('aria-pressed', String(get()))); };
+  tb('tb-spin', () => VIEW.spin, v => VIEW.spin = v);
+  tb('tb-wind', () => VIEW.windOn, v => VIEW.windOn = v);
+  tb('tb-leaves', () => VIEW.leaves, v => { VIEW.leaves = v; updateTag(); });
+  tb('tb-wire', () => VIEW.wire, v => { VIEW.wire = v; });
+  $('tb-frame').addEventListener('click', frameTree);
+  window.addEventListener('keydown', e => {
+    if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+    if (e.key === 'f' || e.key === 'F') frameTree();
+    if (e.key === 'r' || e.key === 'R') reroll();
+    if (e.key === 'l' || e.key === 'L') setStyle(P.style === 'cards' ? 'full' : 'cards');
+  });
+}
+function updateTagSoon() { setTimeout(updateTag, 0); }
+const effCut = () => clamp(Math.round(P.cardLevel), 1, Math.max(1, P.levelCount));
+const LODS = [
+  { style: 'full', detail: 1 },
+  { style: 'cards', detail: 0.6, cardLevel: 0, cardPlanes: 2 },
+  { style: 'cards', detail: 0.4, cardLevel: -1, cardPlanes: 2 },
+  { style: 'cards', detail: 0.25, cardLevel: 1, cardPlanes: 2 },
+];
+function lodValues(i) {
+  const l = Object.assign({}, LODS[i]);
+  if (l.cardLevel === 0) l.cardLevel = P.levelCount;
+  if (l.cardLevel === -1) l.cardLevel = Math.max(1, P.levelCount - 1);
+  return l;
+}
+function currentLOD() {
+  for (let i = LODS.length - 1; i >= 0; i--) {
+    const l = lodValues(i);
+    if (P.style !== l.style || Math.abs(P.detail - l.detail) > 0.005) continue;
+    if (l.style === 'cards' && (effCut() !== l.cardLevel || P.cardPlanes !== l.cardPlanes)) continue;
+    return i;
+  }
+  return -1;
+}
+function applyLOD(i) { Object.assign(P, lodValues(i)); P._mod = true; syncAll(); busy(true); setTimeout(() => { rebuildGeo(); busy(false); saveLocal(); }, 20); }
+function setStyle(v) {
+  if (P.style === v) return;
+  P.style = v; syncAll();
+  const sec = $('sec-poly'); if (sec) sec.open = true;
+  busy(true); setTimeout(() => { rebuildGeo(); busy(false); saveLocal(); }, 20);
+}
+function reroll() { P.seed = Math.floor(Math.random() * 99999); P._mod = true; syncAll(); rebuildGeo(); saveLocal(); }
+function setLeafType(k) {
+  P.leafType = k;
+  P.leafColor = LEAF_TYPES[k].color; P.autumnColor = LEAF_TYPES[k].autumn;
+  if (P.leafDensity <= 0) P.leafDensity = 18;
+  syncAll(); onParam('leaftex');
+}
+function drawLeafThumb(cv, k) {
+  const g = cv.getContext('2d'), lc = leafCanvas(k, 128);
+  const tmp = mkCanvas(128, 128), tg = tmp.getContext('2d');
+  tg.drawImage(lc, 0, 0);
+  if (!LEAF_TYPES[k].colored) {
+    tg.globalCompositeOperation = 'multiply'; tg.fillStyle = LEAF_TYPES[k].color === '#ffffff' ? '#cccccc' : brighten(LEAF_TYPES[k].color); tg.fillRect(0, 0, 128, 128);
+    tg.globalCompositeOperation = 'destination-in'; tg.drawImage(lc, 0, 0);
+  }
+  g.fillStyle = '#111511'; g.fillRect(0, 0, cv.width, cv.height);
+  const asp = LEAF_TYPES[k].aspect, hh = cv.height * 0.9, ww = Math.min(cv.width * 0.9, hh * Math.max(asp, 0.35));
+  g.drawImage(tmp, (cv.width - ww) / 2, (cv.height - hh) / 2, ww, hh);
+}
+function brighten(hex) { const c = hexToRgb(hex).map(v => Math.min(255, Math.round(v * 255 * 1.6))); return `rgb(${c[0]},${c[1]},${c[2]})`; }
+function drawBarkThumb(cv, k) {
+  const S = 72, d = genBark(k, S), g = cv.getContext('2d');
+  const img = g.createImageData(cv.width, cv.height);
+  for (let y = 0; y < cv.height; y++) for (let x = 0; x < cv.width; x++) {
+    const sx = x % S, sy = y % S, i = (sy * S + sx) * 4, o = (y * cv.width + x) * 4;
+    const nx = d.nrm[i] / 127.5 - 1, ny = d.nrm[i + 1] / 127.5 - 1;
+    const sh = clamp(0.82 + (-nx * 0.5 - ny * 0.5) * 0.9, 0.45, 1.3);
+    img.data[o] = Math.min(255, d.alb[i] * sh); img.data[o + 1] = Math.min(255, d.alb[i + 1] * sh); img.data[o + 2] = Math.min(255, d.alb[i + 2] * sh); img.data[o + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+}
+
+function loadPreset(k) {
+  const keep = P.style;
+  P = presetParams(k);
+  if (!('style' in PRESETS[k].p)) P.style = keep;
+  curLevel = 0;
+  busy(true);
+  syncAll();
+  setTimeout(() => {
+    rebuildBarkTex(); rebuildLeafTex(); rebuildGeo(); frameTree(); busy(false); saveLocal();
+  }, 20);
+}
+function cleanParams() { const o = clone(P); delete o._mod; return Object.assign({ app: 'lowtree', version: 1 }, o); }
+function applyParams(obj) {
+  if (!obj || typeof obj !== 'object' || !Array.isArray(obj.levels)) throw new Error('bad');
+  const key = PRESETS[obj.preset] ? obj.preset : 'oak';
+  const base = presetParams(key);
+  for (const k of Object.keys(BASE)) if (k !== 'levels' && k in obj && typeof obj[k] === typeof BASE[k]) base[k] = obj[k];
+  base.levels = base.levels.map((l, i) => { const s = obj.levels[i] || {}; const o = Object.assign({}, l); for (const k of Object.keys(l)) if (typeof s[k] === 'number') o[k] = s[k]; return o; });
+  if (!LEAF_TYPES[base.leafType]) base.leafType = 'oak';
+  if (!BARK_TYPES[base.barkType]) base.barkType = 'oak';
+  base.levelCount = clamp(Math.round(base.levelCount), 1, 3);
+  base._mod = !!obj._mod || true;
+  P = base;
+  syncAll();
+  rebuildBarkTex(); rebuildLeafTex(); rebuildGeo(); frameTree(); saveLocal();
+}
+
+// =====================================================================
+//  Export: GLB, OBJ, ZIP, PNG
+// =====================================================================
+let DL = null;
+async function getCap(name) {
+  for (let i = 0; i < 50; i++) {
+    if (window.claude && typeof window.claude.use === 'function') { try { return await window.claude.use(name); } catch (e) { return null; } }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return null;
+}
+// Standalone hosting (GitHub Pages etc.): plain browser downloads via a blob link.
+const nativeDL = {
+  native: true,
+  async save({ filename, data }) {
+    const blob = data instanceof Blob ? data : new Blob([data]);
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return { status: 'saved' };
+  },
+};
+async function initDownloads() {
+  let framed = true;
+  try { framed = window.self !== window.top; } catch (e) { }
+  DL = framed ? await getCap('downloads') : null;
+  if (!DL) DL = nativeDL;
+  ['x-zip', 'x-png', 'x-json'].forEach(id => { $(id).disabled = false; });
+  $('x-note').textContent = DL.native ? 'Files download straight to your browser.' : 'Each download asks you to confirm before it saves.';
+  $('x-note').classList.remove('warn');
+}
+async function save(filename, data) {
+  if (!DL) { toast('Downloads are not available in this view.'); return; }
+  try { await DL.save({ filename, data }); toast('Saved ' + filename); }
+  catch (e) {
+    const c = e && e.code;
+    if (c === 'declined') toast('Download cancelled');
+    else if (c === 'rate_limited') toast('A download prompt is already open. Try again in a moment.');
+    else if (c === 'too_large') toast('That file is too large. Lower the detail or leaf density and try again.');
+    else toast('The download could not be saved here.');
+  }
+}
+const slugName = () => (P.preset || 'tree') + '-' + P.seed;
+function exportJson() { save('lowtree-' + slugName() + '.json', JSON.stringify(cleanParams(), null, 2)); }
+function exportPng() {
+  dirty = true; draw();
+  canvas.toBlob(b => { if (b) save('lowtree-' + slugName() + '.png', b); else toast('Could not capture the viewport.'); }, 'image/png');
+}
+function rgbaToPng(data, w, h) {
+  const c = mkCanvas(w, h);
+  c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(data), w, h), 0, 0);
+  return new Promise(res => c.toBlob(b => b.arrayBuffer().then(ab => res(new Uint8Array(ab))), 'image/png'));
+}
+async function buildTextures() {
+  const S = 512;
+  const alb = barkTexData.alb.slice(); for (let i = 3; i < alb.length; i += 4) alb[i] = 255;
+  const nrm = barkTexData.nrm.slice(); for (let i = 1; i < nrm.length; i += 4) nrm[i] = 255 - nrm[i]; // glTF/OpenGL: +Y up in image
+  const out = { barkAlb: await rgbaToPng(alb, S, S), barkNrm: await rgbaToPng(nrm, S, S) };
+  if (TREE.cardSpecs) {
+    // atlas rows come bottom-up from readPixels; flip so the PNG reads upright (UVs are flipped to match)
+    const A = R.cardA, flip = src => { const o = new Uint8Array(src.length); for (let y = 0; y < A; y++) o.set(src.subarray((A - 1 - y) * A * 4, (A - y) * A * 4), y * A * 4); return o; };
+    const ca = flip(R.cardAlb0), cn = flip(R.cardNrm0);
+    for (let i = 3; i < cn.length; i += 4) cn[i] = 255;
+    out.cardAlb = await rgbaToPng(ca, A, A); out.cardNrm = await rgbaToPng(cn, A, A);
+    return out;
+  }
+  const leafRaw = R.leafLevel0.slice();
+  // OBJ version: leaf texture multiplied by the mean leaf colour
+  const lc = TREE.leaves.col; let m = [0, 0, 0], n = 0;
+  for (let i = 0; i < lc.length; i += 27) { m[0] += lc[i]; m[1] += lc[i + 1]; m[2] += lc[i + 2]; n++; }
+  m = n ? m.map(v => v / n) : [1, 1, 1];
+  const leafCol = leafRaw.slice();
+  for (let i = 0; i < leafCol.length; i += 4) for (let k = 0; k < 3; k++) leafCol[i + k] = clamp(l2s(s2l(leafCol[i + k] / 255) * m[k]) * 255, 0, 255);
+  out.leaf = await rgbaToPng(leafRaw, S, S); out.leafCol = await rgbaToPng(leafCol, S, S);
+  return out;
+}
+function buildGLB(tx) {
+  const views = [], accessors = [], chunks = []; let off = 0;
+  const pushBytes = (u8, target) => {
+    const pad = (4 - (off % 4)) % 4; if (pad) { chunks.push(new Uint8Array(pad)); off += pad; }
+    chunks.push(u8); const v = { buffer: 0, byteOffset: off, byteLength: u8.byteLength }; if (target) v.target = target;
+    views.push(v); off += u8.byteLength; return views.length - 1;
+  };
+  const acc = (arr, type, comp, count, target, mm) => {
+    const bv = pushBytes(new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength), target);
+    const a = { bufferView: bv, componentType: comp, count, type };
+    if (mm) { a.min = mm.min; a.max = mm.max; }
+    accessors.push(a); return accessors.length - 1;
+  };
+  const minmax = pos => { const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity]; for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], pos[i + k]); mx[k] = Math.max(mx[k], pos[i + k]); } return { min: mn, max: mx }; };
+  const cards = !!TREE.cardSpecs;
+  const prim = (m, color, mat, uv) => {
+    const nv = m.pos.length / 3;
+    return { attributes: {
+      POSITION: acc(m.pos, 'VEC3', 5126, nv, 34962, minmax(m.pos)),
+      NORMAL: acc(m.nrm, 'VEC3', 5126, nv, 34962),
+      TEXCOORD_0: acc(uv || m.uv, 'VEC2', 5126, nv, 34962),
+      COLOR_0: acc(color, 'VEC3', 5126, nv, 34962),
+    }, indices: acc(m.idx, 'SCALAR', 5125, m.idx.length, 34963), material: mat, mode: 4 };
+  };
+  const b = TREE.bark, l = TREE.leaves, hasLeaves = l.idx.length > 0;
+  const prims = [prim(b, b.col, 0)];
+  if (hasLeaves && cards) {
+    const uv = new Float32Array(l.uv); for (let i = 1; i < uv.length; i += 2) uv[i] = 1 - uv[i];
+    prims.push(prim(l, l.col, 1, uv));
+  } else if (hasLeaves) {
+    const lc = new Float32Array(l.col.length);
+    for (let i = 0, v = 0; i < lc.length; i += 3, v++) { const ao = l.tan[v * 3]; lc[i] = l.col[i] * ao; lc[i + 1] = l.col[i + 1] * ao; lc[i + 2] = l.col[i + 2] * ao; }
+    prims.push(prim(l, lc, 1));
+  }
+  const img = (u8, name) => ({ bufferView: pushBytes(u8), mimeType: 'image/png', name });
+  const images = [img(tx.barkAlb, 'bark_albedo'), img(tx.barkNrm, 'bark_normal')];
+  if (hasLeaves && cards) images.push(img(tx.cardAlb, 'cards_albedo'), img(tx.cardNrm, 'cards_normal'));
+  else if (hasLeaves) images.push(img(tx.leaf, 'leaf'));
+  const tint = lin(P.barkTint);
+  const materials = [{ name: 'bark', pbrMetallicRoughness: { baseColorTexture: { index: 0 }, baseColorFactor: [tint[0], tint[1], tint[2], 1], metallicFactor: 0, roughnessFactor: 0.92 }, normalTexture: { index: 1, scale: P.barkRelief } }];
+  if (hasLeaves && cards) materials.push({ name: 'branch_cards', pbrMetallicRoughness: { baseColorTexture: { index: 2 }, metallicFactor: 0, roughnessFactor: 0.75 }, normalTexture: { index: 3 }, alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true });
+  else if (hasLeaves) materials.push({ name: 'leaves', pbrMetallicRoughness: { baseColorTexture: { index: 2 }, metallicFactor: 0, roughnessFactor: 0.7 }, alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true });
+  const textures = [{ sampler: 0, source: 0 }, { sampler: 0, source: 1 }];
+  if (hasLeaves) textures.push({ sampler: 1, source: 2 });
+  if (hasLeaves && cards) textures.push({ sampler: 1, source: 3 });
+  const json = {
+    asset: { version: '2.0', generator: 'Lowtree procedural tree generator' },
+    scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0, name: (PRESETS[P.preset] || PRESETS.oak).name }],
+    meshes: [{ name: 'tree', primitives: prims }], materials, textures, images,
+    samplers: [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }, { magFilter: 9729, minFilter: 9987, wrapS: 33071, wrapT: 33071 }],
+    accessors, bufferViews: views, buffers: [{ byteLength: 0 }],
+  };
+  const pad4 = (off % 4) ? 4 - off % 4 : 0;
+  const binLen = off + pad4;
+  json.buffers[0].byteLength = binLen;
+  let jsonBytes = new TextEncoder().encode(JSON.stringify(json));
+  const jpad = (4 - jsonBytes.length % 4) % 4;
+  const total = 12 + 8 + jsonBytes.length + jpad + 8 + binLen;
+  const out = new Uint8Array(total), dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
+  dv.setUint32(12, jsonBytes.length + jpad, true); dv.setUint32(16, 0x4E4F534A, true);
+  out.set(jsonBytes, 20); for (let i = 0; i < jpad; i++) out[20 + jsonBytes.length + i] = 0x20;
+  let p = 20 + jsonBytes.length + jpad;
+  dv.setUint32(p, binLen, true); dv.setUint32(p + 4, 0x004E4942, true); p += 8;
+  for (const c of chunks) { out.set(c, p); p += c.byteLength; }
+  return out;
+}
+function buildOBJ(tx) {
+  const b = TREE.bark, l = TREE.leaves, lines = ['# Lowtree procedural tree · metres, Y up', 'mtllib lowtree.mtl', 'o tree'];
+  const f4 = v => (Math.round(v * 10000) / 10000).toString();
+  const cards = !!TREE.cardSpecs;
+  const emit = (m, keepV) => {
+    for (let i = 0; i < m.pos.length; i += 3) lines.push('v ' + f4(m.pos[i]) + ' ' + f4(m.pos[i + 1]) + ' ' + f4(m.pos[i + 2]));
+    for (let i = 0; i < m.uv.length; i += 2) lines.push('vt ' + f4(m.uv[i]) + ' ' + f4(keepV ? m.uv[i + 1] : 1 - m.uv[i + 1]));
+    for (let i = 0; i < m.nrm.length; i += 3) lines.push('vn ' + f4(m.nrm[i]) + ' ' + f4(m.nrm[i + 1]) + ' ' + f4(m.nrm[i + 2]));
+  };
+  emit(b, false); emit(l, cards);
+  const faces = (m, o) => { for (let i = 0; i < m.idx.length; i += 3) { const a = m.idx[i] + o, c = m.idx[i + 1] + o, d = m.idx[i + 2] + o; lines.push(`f ${a}/${a}/${a} ${c}/${c}/${c} ${d}/${d}/${d}`); } };
+  lines.push('g bark', 'usemtl bark'); faces(b, 1);
+  if (l.idx.length) { lines.push('g leaves', 'usemtl leaves'); faces(l, 1 + b.pos.length / 3); }
+  const t = hexToRgb(P.barkTint);
+  const mtl = ['# Lowtree materials', 'newmtl bark', `Kd ${t.map(v => v.toFixed(3)).join(' ')}`, 'Ka 0 0 0', 'Ks 0.04 0.04 0.04', 'Ns 10', 'map_Kd bark_albedo.png', 'map_Bump bark_normal.png', '',
+    'newmtl leaves', 'Kd 1 1 1', 'Ka 0 0 0', 'Ks 0.05 0.05 0.05', 'Ns 20',
+    ...(cards ? ['map_Kd cards_albedo.png', 'map_d cards_albedo.png', 'map_Bump cards_normal.png'] : ['map_Kd leaf_color.png', 'map_d leaf_color.png']), ''].join('\n');
+  return { obj: lines.join('\n') + '\n', mtl };
+}
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const [name, data] of files) {
+    const nb = enc.encode(name), crc = crc32(data);
+    const lh = new Uint8Array(30 + nb.length), lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x0800, true); lv.setUint16(8, 0, true);
+    lv.setUint16(10, time, true); lv.setUint16(12, date, true); lv.setUint32(14, crc, true);
+    lv.setUint32(18, data.length, true); lv.setUint32(22, data.length, true); lv.setUint16(26, nb.length, true); lv.setUint16(28, 0, true);
+    lh.set(nb, 30);
+    const ch = new Uint8Array(46 + nb.length), cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0x0800, true); cv.setUint16(10, 0, true);
+    cv.setUint16(12, time, true); cv.setUint16(14, date, true); cv.setUint32(16, crc, true); cv.setUint32(20, data.length, true); cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nb.length, true); cv.setUint32(42, off, true); ch.set(nb, 46);
+    parts.push(lh, data); central.push(ch); off += lh.length + data.length;
+  }
+  const cdSize = central.reduce((s, c) => s + c.length, 0);
+  const end = new Uint8Array(22), ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true); ev.setUint32(16, off, true);
+  return new Blob([...parts, ...central, end], { type: 'application/zip' });
+}
+async function exportZip() {
+  if (!TREE || !barkTexData || !R) return;
+  busy(true);
+  try {
+    const tx = await buildTextures();
+    const glb = buildGLB(tx);
+    const { obj, mtl } = buildOBJ(tx);
+    const enc = new TextEncoder();
+    const st = TREE.stats, pr = PRESETS[P.preset] || PRESETS.oak;
+    const readme = [
+      'Lowtree procedural tree', '',
+      `Species preset: ${pr.name} (${pr.latin}) · seed ${P.seed}`,
+      `Height ${st.height.toFixed(2)} m · crown ${st.crown.toFixed(2)} m · ${fmtInt(st.tris)} triangles · ${fmtInt(st.leaves)} leaf cards`, '',
+      ...(TREE.cardSpecs ? [
+      `Foliage: ${fmtInt(st.leaves)} branch cards replacing level ${TREE.twig.cut} branches, ${P.cardPlanes} plane(s) each, ${P.cardVariants} baked variants.`,
+      'lowtree.glb       glTF 2.0 binary. Bark and branch cards are two primitives. Cards use alphaMode MASK, cutoff 0.5, double sided,',
+      '                  with the baked normal atlas. COLOR_0 holds canopy ambient occlusion.',
+      'lowtree.obj/.mtl  Wavefront OBJ with UVs and normals. The leaves material points at cards_albedo.png.',
+      'cards_albedo.png  Atlas of baked 3D branches: colour + alpha (clip at 0.5). cards_normal.png  Matching tangent-space normals (+Y up).',
+      ] : [
+      'lowtree.glb       glTF 2.0 binary. Bark and leaves are two primitives. Leaf colour and ambient occlusion live in COLOR_0',
+      '                  (multiplied with the base colour texture, per the glTF spec). Leaves use alphaMode MASK, cutoff 0.5, double sided.',
+      'lowtree.obj/.mtl  Wavefront OBJ with UVs and normals. The leaf material uses leaf_color.png (colour baked in).',
+      'leaf.png          Greyscale leaf card with alpha, used by the GLB.  leaf_color.png  The same card tinted, used by the OBJ.',
+      ]),
+      'bark_albedo.png   Tileable bark colour.  bark_normal.png  Tileable tangent-space normal map (OpenGL / +Y up).',
+      'settings.json     Load it back into Lowtree with "Load settings".', '',
+      'Units are metres, Y is up, the trunk base sits at the origin.',
+    ].join('\n');
+    const files = [
+      ['lowtree.glb', glb], ['lowtree.obj', enc.encode(obj)], ['lowtree.mtl', enc.encode(mtl)],
+      ['bark_albedo.png', tx.barkAlb], ['bark_normal.png', tx.barkNrm],
+      ...(TREE.cardSpecs ? [['cards_albedo.png', tx.cardAlb], ['cards_normal.png', tx.cardNrm]] : [['leaf.png', tx.leaf], ['leaf_color.png', tx.leafCol]]),
+      ['settings.json', enc.encode(JSON.stringify(cleanParams(), null, 2))], ['README.txt', enc.encode(readme)],
+    ];
+    await save('lowtree-' + slugName() + '.zip', makeZip(files));
+  } catch (e) {
+    console.error(e); toast('Export failed: ' + (e && e.message || e));
+  } finally { busy(false); }
+}
+
+// =====================================================================
+//  Boot
+// =====================================================================
+function start(data) {
+  try {
+    if (data && data.P && Array.isArray(data.P.levels)) { P = data.P; if (data.VIEW) Object.assign(VIEW, data.VIEW); if (data.cam) Object.assign(cam, data.cam); }
+    else { const s = localStorage.getItem('lowtree:v1'); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.levels) && PRESETS[o.preset]) { P = Object.assign(presetParams(o.preset), o); } } }
+  } catch (e) { }
+  if (!LEAF_TYPES[P.leafType]) P.leafType = 'oak';
+  if (!BARK_TYPES[P.barkType]) P.barkType = 'oak';
+  buildUI();
+  syncAll();
+  const ok = initGL();
+  if (!ok) { $('nogl').style.display = 'grid'; TREE = generateTree(P); updateTag(); return; }
+  rebuildBarkTex(); rebuildLeafTex(); rebuildGeo();
+  if (!(data && data.cam)) frameTree();
+  new ResizeObserver(() => { dirty = true; }).observe(canvas);
+  requestAnimationFrame(loop);
+  initDownloads();
+  window.claude?.hot?.snapshot?.(() => ({ P, VIEW, cam }));
+}
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+</body>
+</html>
