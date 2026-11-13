@@ -154,6 +154,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
 .xgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .xgrid .wide{grid-column:1 / 3}
 .fileinp{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.pfoot{padding:14px 16px 22px;font:400 10.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 
 @media (max-width:760px){
   #app{grid-template-columns:1fr;grid-template-rows:56% 44%}
@@ -220,6 +221,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
       <button class="btn" id="reset" title="Reset to the selected species">Reset</button>
     </div>
     <div id="sections"></div>
+    <footer class="pfoot"><span>We collect only visitor counts</span></footer>
   </section>
 </div>
 
@@ -4179,5 +4181,6 @@ function start(data) {
 }
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 </script>
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "c88190aa90544569881da7800f4875af"}'></script>
 </body>
 </html>

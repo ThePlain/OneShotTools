@@ -118,11 +118,13 @@ a{color:inherit}
   <footer class="foot">
     <span>Static site · GitHub Pages</span>
     <span>Every tool runs locally</span>
+    <span>We collect only visitor counts</span>
   </footer>
 </div>
 <script>
   const n = document.querySelectorAll('#tools .tool').length;
   document.getElementById('count').textContent = n + (n === 1 ? ' tool' : ' tools');
 </script>
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "c88190aa90544569881da7800f4875af"}'></script>
 </body>
 </html>
